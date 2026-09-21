@@ -1,0 +1,22 @@
+{
+  "purpose": "Small sanitized Phase 0B endpoint-shape fixture",
+  "captured_at": "2026-09-21",
+  "token_identities": {
+    "avalanche": "0x26deBD39D5eD069770406FCa10A0E4f8d2c743eB",
+    "solana": "3jUf2RTyXp867piSB2dt8uUcNiLDW58asjGtXkRAkBbe"
+  },
+  "requests": [
+    {"chain": "avalanche", "endpoint": "token-information", "http_status": 200, "result": "usable", "record_count": 1},
+    {"chain": "avalanche", "endpoint": "flows", "http_status": 200, "result": "usable", "record_count": 2},
+    {"chain": "avalanche", "endpoint": "dex-trades", "http_status": 200, "result": "usable", "record_count": 2},
+    {"chain": "avalanche", "endpoint": "who-bought-sold", "http_status": 200, "result": "usable", "record_count": 2},
+    {"chain": "avalanche", "endpoint": "transfers", "http_status": 200, "result": "usable", "record_count": 2},
+    {"chain": "avalanche", "endpoint": "holders", "http_status": 200, "result": "usable", "record_count": 2},
+    {"chain": "solana", "endpoint": "token-information", "http_status": 200, "result": "usable", "record_count": 1},
+    {"chain": "solana", "endpoint": "flows", "http_status": 200, "result": "empty", "record_count": 0},
+    {"chain": "solana", "endpoint": "dex-trades", "http_status": 200, "result": "usable", "record_count": 2},
+    {"chain": "solana", "endpoint": "who-bought-sold", "http_status": 200, "result": "usable", "record_count": 2},
+    {"chain": "solana", "endpoint": "transfers", "http_status": 200, "result": "usable", "record_count": 2},
+    {"chain": "solana", "endpoint": "holders", "http_status": 200, "result": "usable", "record_count": 2}
+  ]
+}
