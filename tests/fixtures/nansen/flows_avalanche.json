@@ -4,15 +4,15 @@
     "price_usd": 0.01,
     "token_amount": 1000.0,
     "value_usd": 10.0,
-    "holders_count": 100,
-    "total_inflows_count": 5,
-    "total_outflows_count": 3,
+    "holders_count": 42,
+    "total_inflows_count": 7.0,
+    "total_outflows_count": 4.0,
     "bucket_end": "2026-09-20T12:59:59Z",
     "is_complete": true,
-    "total_inflows_cex": 1,
-    "total_inflows_dex": 4,
-    "total_outflows_cex": 1,
-    "total_outflows_dex": 2
+    "total_inflows_cex": null,
+    "total_inflows_dex": null,
+    "total_outflows_cex": null,
+    "total_outflows_dex": null
   }],
   "pagination": {"page": 1, "per_page": 2, "is_last_page": true}
 }

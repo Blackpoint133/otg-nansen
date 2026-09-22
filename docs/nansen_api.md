@@ -98,10 +98,29 @@ Task 015 live-verified the Avalanche request transport and sanitized response
 structures with exactly one attempt per endpoint. Token-information returned
 an object and normalized successfully. Flows returned a non-empty paginated
 first page with `is_complete` and `bucket_end` fields, but the current flow
-normalizer rejected the observed page; completeness is therefore not accepted
-as an ingestion contract. DEX trades returned a non-empty paginated first page
-and normalized successfully. No live response body was retained, and these
-observations do not establish complete historical ingestion behavior.
+normalizer initially rejected the observed page because the inflow and outflow
+count fields were delivered as finite, mathematically integral JSON floats.
+Task 016 added a field-specific exact conversion for those count fields while
+keeping fractional, non-finite, boolean, negative, and malformed values
+invalid. The observed records also contained boolean `is_complete`, timestamp
+`bucket_end`, and nullable CEX/DEX count fields. The sanitized fixture mirrors
+those types without retaining live values. Completeness is therefore not
+accepted as an ingestion contract. DEX trades returned a non-empty paginated
+first page and normalized successfully. No live response body was retained,
+and these observations do not establish complete historical ingestion
+behavior.
+
+Task 016 evidence classification:
+
+- OFFICIAL-DOC VERIFIED: flow count field names and their analytical count
+  semantics are documented at
+  https://docs.nansen.ai/api/token-god-mode/flows.
+- LIVE VERIFIED: the diagnostic page used finite integral JSON floats for
+  `total_inflows_count` and `total_outflows_count`, integer `holders_count`,
+  boolean `is_complete`, timezone-bearing timestamps, and nullable optional
+  CEX/DEX count fields.
+- FIXTURE VERIFIED: the sanitized flow fixture reproduces those field types
+  and the repaired normalizer converts only exact integral count values.
 
 ## Not verified
 

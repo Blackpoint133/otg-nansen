@@ -153,3 +153,21 @@ established because pagination was intentionally limited to one page.
 Review the sanitized live flows mismatch and correct the normalization contract
 only with evidence from the observed official response shape. Do not start
 real ingestion or broaden the live request budget.
+
+## TASK 016 ADDENDUM
+
+Task 016 used one additional bounded Avalanche flows request because the Task
+015 report retained only the exception class, not its field-level message. The
+safe diagnostic identified `total_inflows_count` as a finite, mathematically
+integral JSON float while the normalizer required an integer. The companion
+`total_outflows_count` field had the same observed wire type. Optional CEX/DEX
+count fields were null.
+
+The normalizer was repaired narrowly with a dedicated exact integer-like
+conversion for these two count fields. It accepts finite integral numeric
+values and rejects fractional, non-finite, boolean, negative, and malformed
+values. The sanitized fixture and regression tests reproduce the observed type
+shape. The diagnostic response object was not retained after the original
+probe process, so post-repair normalization was proven against the sanitized
+observed shape rather than by issuing another live request. No live data was
+persisted.

@@ -59,7 +59,8 @@ def test_flows_normalize_and_convert_to_utc():
     assert isinstance(model, NormalizedFlowRecord)
     assert model.date.tzinfo is timezone.utc
     assert model.price_usd == Decimal("0.01")
-    assert model.total_inflows_count == 5
+    assert model.total_inflows_count == 7
+    assert model.total_outflows_count == 4
     assert model.to_dict()["date"] == "2026-09-20T12:00:00Z"
 
 
@@ -92,6 +93,24 @@ def test_flows_reject_invalid_numeric_values(field, value):
     response = load("flows_avalanche.json")
     response["data"][0][field] = value
     with pytest.raises(NormalizationError):
+        normalize_flows(response, chain="avalanche", token_address=TOKEN_ADDRESS, flow_label="smart_money")
+
+
+@pytest.mark.parametrize("field", ["total_inflows_count", "total_outflows_count"])
+@pytest.mark.parametrize("value", [0.0, 1.0, 100.0])
+def test_flow_count_accepts_finite_integral_float(field, value):
+    response = load("flows_avalanche.json")
+    response["data"][0][field] = value
+    model = normalize_flows(response, chain="avalanche", token_address=TOKEN_ADDRESS, flow_label="smart_money")[0]
+    assert getattr(model, field) == int(value)
+
+
+@pytest.mark.parametrize("field", ["total_inflows_count", "total_outflows_count"])
+@pytest.mark.parametrize("value", [1.5, -1.0, float("nan"), float("inf"), True])
+def test_flow_count_rejects_fractional_nonfinite_negative_or_boolean(field, value):
+    response = load("flows_avalanche.json")
+    response["data"][0][field] = value
+    with pytest.raises(NormalizationError, match=field):
         normalize_flows(response, chain="avalanche", token_address=TOKEN_ADDRESS, flow_label="smart_money")
 
 

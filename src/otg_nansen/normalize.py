@@ -56,6 +56,21 @@ def _integer(record: Mapping[str, Any], field: str, context: str, required: bool
     return value
 
 
+def _integer_like(record: Mapping[str, Any], field: str, context: str, required: bool = True) -> Optional[int]:
+    """Accept exact JSON integral numbers for count fields without loosening other integers."""
+    value = record.get(field)
+    if value is None and not required:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise NormalizationError(f"{context}.{field}: expected finite non-negative integer")
+    if isinstance(value, float):
+        if not value == value or value in (float("inf"), float("-inf")) or not value.is_integer():
+            raise NormalizationError(f"{context}.{field}: expected finite non-negative integer")
+    if value < 0:
+        raise NormalizationError(f"{context}.{field}: expected finite non-negative integer")
+    return int(value)
+
+
 def _boolean(record: Mapping[str, Any], field: str, context: str) -> Optional[bool]:
     value = record.get(field)
     if value is None:
@@ -140,7 +155,7 @@ def _normalize_flow(
     item: Mapping[str, Any],
     chain: str,
     token_address: str,
-    flow_label: Optional[str],
+    flow_label: str,
     context: str,
 ) -> NormalizedFlowRecord:
     return NormalizedFlowRecord(
@@ -151,8 +166,8 @@ def _normalize_flow(
         token_amount=_decimal(item, "token_amount", context),
         value_usd=_decimal(item, "value_usd", context),
         holders_count=_integer(item, "holders_count", context),
-        total_inflows_count=_integer(item, "total_inflows_count", context),
-        total_outflows_count=_integer(item, "total_outflows_count", context),
+        total_inflows_count=_integer_like(item, "total_inflows_count", context),
+        total_outflows_count=_integer_like(item, "total_outflows_count", context),
         flow_label=flow_label,
         bucket_end=_timestamp(item, "bucket_end", context, False),
         is_complete=_boolean(item, "is_complete", context),
