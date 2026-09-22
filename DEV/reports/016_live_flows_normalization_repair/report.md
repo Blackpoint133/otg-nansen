@@ -90,11 +90,10 @@ negative, non-finite, and boolean count values. The full default suite passed.
 
 ## LIVE_RENORMALIZATION
 
-The original live response object was not retained after the diagnostic
-process, so it could not be rerun in memory after the source edit without a
-second prohibited live request. The repaired normalizer passes the sanitized
-fixture that reproduces the observed live type/null contract. A same-object
-post-edit live rerun is therefore UNPROVEN.
+Task 016V made one newly authorized direct flows request and immediately ran
+the repaired normalizer against that same in-memory response. The live page
+normalized successfully. This closes the prior same-object post-repair live
+validation gap.
 
 ## FLOW_COMPLETENESS_OBSERVATION
 
