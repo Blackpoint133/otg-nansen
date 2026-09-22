@@ -19,3 +19,8 @@ identity question because the reviewed Nansen chain list did not include
 
 The first code foundation is a bounded HTTP client with no persistence or
 service runtime.
+
+The raw API response boundary now feeds immutable normalized models for token
+information, flows, and DEX trades. Normalization validates required fields,
+preserves caller-trusted chain/token identity, uses UTC-aware timestamps, and
+uses Decimal values for token and financial numbers. No persistence exists yet.

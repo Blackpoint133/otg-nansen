@@ -32,3 +32,20 @@ class ResponseContractError(NansenError):
 
 class NansenTransportError(NansenError):
     """Raised when a bounded request fails at the transport layer."""
+
+
+class PaginationLimitReached(NansenError):
+    """Raised when a paginated response remains incomplete at the page limit."""
+
+    def __init__(self, endpoint: str, pages_fetched: int, records_collected: int):
+        super().__init__(
+            f"pagination limit reached: endpoint={endpoint} "
+            f"pages_fetched={pages_fetched} records_collected={records_collected}"
+        )
+        self.endpoint = endpoint
+        self.pages_fetched = pages_fetched
+        self.records_collected = records_collected
+
+
+class NormalizationError(NansenError):
+    """Raised when a required normalized field is malformed or missing."""

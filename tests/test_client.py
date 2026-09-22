@@ -13,6 +13,7 @@ from otg_nansen.errors import (
     ConfigurationError,
     NansenHTTPError,
     NansenTransportError,
+    PaginationLimitReached,
     RequestBudgetExceeded,
     ResponseContractError,
     ResponseDecodeError,
@@ -176,7 +177,8 @@ def test_pagination_stops_on_last_page():
 def test_pagination_stops_at_max_pages():
     responses = [FakeResponse(body={"data": [1], "pagination": {"is_last_page": False}}) for _ in range(2)]
     api, _ = client(responses, max_pages=2)
-    assert api.paginate("/pages", {}) == [1, 1]
+    with pytest.raises(PaginationLimitReached):
+        api.paginate("/pages", {})
 
 
 def test_pagination_rejects_non_list_data():

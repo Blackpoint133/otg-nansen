@@ -66,6 +66,13 @@ Task 004 implements only `token_information`, `flows`, and `dex_trades`.
 Persistence, backfill, and business-specific event analysis are not
 implemented.
 
+The normalization boundary is separate from the raw client. It produces
+immutable token-information, flow, and DEX-trade models. Required malformed
+fields fail explicitly; unknown extra fields are tolerated; empty flow data is
+valid. Timestamps become timezone-aware UTC values and numeric analytical
+values become Decimal values. Pagination now raises if its page limit is
+reached while `is_last_page` is false, so incomplete data cannot look complete.
+
 The corrected fixture representation is: token-information has an object in
 `data` with token details and spot metrics; flows and DEX trades have list
 `data` plus `pagination`. Live verification confirmed these shapes for the

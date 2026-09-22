@@ -13,6 +13,7 @@ from .errors import (
     ConfigurationError,
     NansenHTTPError,
     NansenTransportError,
+    PaginationLimitReached,
     RequestBudgetExceeded,
     ResponseContractError,
     ResponseDecodeError,
@@ -84,8 +85,10 @@ class NansenClient:
         pagination.setdefault("per_page", self.config.page_size)
         request_payload["pagination"] = pagination
         records: list[Any] = []
+        pages_fetched = 0
         for _ in range(self.config.max_pages):
             response = self.request(endpoint, request_payload)
+            pages_fetched += 1
             data = response.get("data")
             response_pagination = response.get("pagination")
             if not isinstance(data, list):
@@ -96,7 +99,7 @@ class NansenClient:
             if response_pagination["is_last_page"]:
                 return records
             pagination["page"] = int(pagination["page"]) + 1
-        return records
+        raise PaginationLimitReached(endpoint, pages_fetched, len(records))
 
     def token_information(self, chain: str, token_address: str, timeframe: str = "1d") -> Dict[str, Any]:
         return self.request("/api/v1/tgm/token-information", {"chain": chain, "token_address": token_address, "timeframe": timeframe})
