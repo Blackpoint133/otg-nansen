@@ -64,7 +64,7 @@ def test_staging_repository_lifecycle_and_constraints():
                 repo.audit_connection.execute("DELETE FROM nansen.ingestion_runs WHERE run_id = %s", (run_id,))
             repo.audit_connection.execute("DELETE FROM nansen.flows WHERE flow_label IN ('task012_smart_money', 'task012_exchange', 'task012_success', 'task012_failure')")
             repo.audit_connection.execute("DELETE FROM nansen.dex_trades WHERE transaction_hash = 'task012_trade_identity'")
-            repo.audit_connection.execute("DELETE FROM nansen.token_information WHERE name = 'TASK011_TEST_TOKEN'")
+            repo.audit_connection.execute("DELETE FROM nansen.token_information WHERE name = 'TASK012_TEST_TOKEN'")
 
     try:
         cleanup()
@@ -109,7 +109,7 @@ def test_staging_repository_lifecycle_and_constraints():
         repo.commit_data_transaction()
         assert _count(repo, "dex_trades", "trade_key = %s", map_dex_trade(trade)["trade_key"]) == 1
 
-        token = replace(token, name="TASK011_TEST_TOKEN")
+        token = replace(token, name="TASK012_TEST_TOKEN")
         retrieved = datetime(2026, 9, 22, tzinfo=timezone.utc)
         repo.begin_data_transaction()
         repo.store_token_information(token, retrieved)
@@ -118,7 +118,7 @@ def test_staging_repository_lifecycle_and_constraints():
         repo.store_token_information(token, retrieved)
         repo.store_token_information(token, retrieved.replace(hour=1))
         repo.commit_data_transaction()
-        assert _count(repo, "token_information", "name = %s", "TASK011_TEST_TOKEN") == 2
+        assert _count(repo, "token_information", "name = %s", "TASK012_TEST_TOKEN") == 2
 
         repo.begin_ingestion_run(_run(RUN_IDS[1], "task012_success"))
         success_flow = replace(flow, flow_label="task012_success")
@@ -141,7 +141,8 @@ def test_staging_repository_lifecycle_and_constraints():
         repo.begin_data_transaction()
         repo.advance_checkpoint("avalanche", "flows", TOKEN, older, RUN_IDS[1], "task012_success")
         repo.commit_data_transaction()
-        assert repo.read_checkpoint("avalanche", "flows", TOKEN, "task012_success")["last_complete_timestamp"].hour == 13
+        checkpoint_timestamp = repo.read_checkpoint("avalanche", "flows", TOKEN, "task012_success")["last_complete_timestamp"]
+        assert checkpoint_timestamp.astimezone(timezone.utc).hour == 13
 
         repo.begin_ingestion_run(_run(RUN_IDS[2], "task012_failure"))
         repo.begin_data_transaction()
@@ -199,8 +200,8 @@ def test_staging_repository_lifecycle_and_constraints():
         repo.rollback_data_transaction()
         cleanup()
         assert _count(repo, "flows", "flow_label IN ('task012_smart_money', 'task012_exchange', 'task012_success', 'task012_failure')", None) == 0
-        assert _count(repo, "dex_trades", "transaction_hash LIKE 'task012_%'", None) == 0
-        assert _count(repo, "token_information", "name = %s", "TASK011_TEST_TOKEN") == 0
+        assert _count(repo, "dex_trades", "transaction_hash LIKE %s", "task012_%") == 0
+        assert _count(repo, "token_information", "name = %s", "TASK012_TEST_TOKEN") == 0
         assert _count(repo, "checkpoints", "last_success_run_id IN (%s, %s, %s, %s)", tuple(RUN_IDS)) == 0
         assert _count(repo, "ingestion_runs", "run_id IN (%s, %s, %s, %s)", tuple(RUN_IDS)) == 0
         repo.close()

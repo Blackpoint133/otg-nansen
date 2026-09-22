@@ -45,5 +45,7 @@ command. The migration is guarded to `server_otg_staging` and is now applied
 there. Production is not connected for writes or modified.
 
 Task 013A applied the reviewed `nansen` schema to `server_otg_staging` only.
-Integration tests remain intentionally pending until the operator revokes the
-temporary CREATE privilege.
+Task 013B validated the real PostgreSQL repository and cleaned all synthetic
+integration data. The owner intentionally retains CREATE on
+`server_otg_staging` as a persistent staging-only privilege; no such privilege
+was granted on production.

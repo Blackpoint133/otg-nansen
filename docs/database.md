@@ -21,8 +21,9 @@ retention decisions are approved; this task created no tables.
 
 ## Proposed Nansen persistence design
 
-The following is PROPOSED / NOT YET APPLIED. The review-only artifact is
-`sql/001_create_nansen_schema.sql`; it has not been executed.
+The following schema is applied to `server_otg_staging` only. It remains NOT
+APPLIED to production. The migration artifact is
+`sql/001_create_nansen_schema.sql`.
 
 The proposed isolated `nansen` schema contains:
 
@@ -74,4 +75,7 @@ Checkpoint advancement now validates the actual successful ingestion run,
 canonical token, endpoint, chain, and flow scope. The checkpoint SQL uses an
 `INSERT ... SELECT` eligibility guard, and the schema composite foreign key
 prevents cross-stream run references. Success status is updated before the
-checkpoint in the same transaction.
+checkpoint in the same transaction. Task 013B validated the deployed schema
+with the opt-in PostgreSQL suite and removed all synthetic test rows. The
+owner-approved `gunz_user` CREATE privilege remains intentionally persistent
+on `server_otg_staging` only; no production privileges were granted.
