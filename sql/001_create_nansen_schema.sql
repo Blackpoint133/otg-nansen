@@ -88,15 +88,21 @@ CREATE TABLE nansen.ingestion_runs (
         OR (endpoint <> 'flows' AND flow_label = '')
     ),
     CHECK (
-        request_scope ? 'chain'
+        (
+        jsonb_typeof(request_scope) = 'object'
+        AND request_scope ? 'chain'
         AND request_scope ? 'endpoint'
         AND request_scope ? 'token_address'
         AND request_scope ? 'flow_label'
-        AND
-        request_scope->>'chain' = chain
+        AND jsonb_typeof(request_scope->'chain') = 'string'
+        AND jsonb_typeof(request_scope->'endpoint') = 'string'
+        AND jsonb_typeof(request_scope->'token_address') = 'string'
+        AND jsonb_typeof(request_scope->'flow_label') = 'string'
+        AND request_scope->>'chain' = chain
         AND request_scope->>'endpoint' = endpoint
         AND request_scope->>'token_address' = token_address
         AND request_scope->>'flow_label' = flow_label
+        ) IS TRUE
     )
 );
 

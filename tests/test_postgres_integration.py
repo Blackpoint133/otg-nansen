@@ -40,7 +40,7 @@ def _run(run_id: str, label: str) -> dict:
 
 
 def _count(repo, table: str, where: str, value):
-    params = () if value is None else (value,)
+    params = () if value is None else (value if isinstance(value, tuple) else (value,))
     return repo.audit_connection.execute(f"SELECT count(*) FROM nansen.{table} WHERE {where}", params).fetchone()[0]
 
 
@@ -50,7 +50,10 @@ def test_staging_repository_lifecycle_and_constraints():
     flow = normalize_flows(_load("flows_avalanche.json"), chain="avalanche", token_address=TOKEN, flow_label="task011_smart_money")[0]
     incomplete = replace(flow, is_complete=False)
     complete = replace(flow, is_complete=True, value_usd=flow.value_usd + 1)
-    trade = normalize_dex_trades(_load("dex_trades_avalanche.json"), chain="avalanche", token_address=TOKEN)[0]
+    trade = replace(
+        normalize_dex_trades(_load("dex_trades_avalanche.json"), chain="avalanche", token_address=TOKEN)[0],
+        transaction_hash="task012_trade_identity",
+    )
     token = normalize_token_information(_load("token_information_avalanche.json"), chain="avalanche", token_address=TOKEN)
 
     def cleanup():
@@ -90,8 +93,10 @@ def test_staging_repository_lifecycle_and_constraints():
         scoped_exchange = replace(flow, flow_label="task011_exchange")
         repo.begin_data_transaction()
         repo.store_flows([scoped_exchange])
+        repo.advance_checkpoint("avalanche", "flows", TOKEN, scoped_exchange.date, RUN_IDS[0], "success", True, "task011_exchange")
         repo.commit_data_transaction()
         assert _count(repo, "flows", "flow_label LIKE 'task011_%'", None) == 2
+        assert repo.read_checkpoint("avalanche", "flows", TOKEN, "task011_exchange") is not None
 
         repo.begin_data_transaction()
         repo.store_dex_trades([trade])
@@ -153,6 +158,8 @@ def test_staging_repository_lifecycle_and_constraints():
             {"chain": "avalanche", "endpoint": "flows", "flow_label": "task011_invalid"},
             {"chain": "avalanche", "endpoint": "flows", "token_address": TOKEN},
             {"chain": "avalanche", "endpoint": "flows", "token_address": TOKEN, "flow_label": "wrong"},
+            {"chain": "avalanche", "endpoint": "inventory", "token_address": TOKEN, "flow_label": "task011_invalid"},
+            {"chain": "avalanche", "endpoint": "inventory", "token_address": TOKEN, "flow_label": ""},
         ]
         for index, scope in enumerate(invalid_scopes):
             with pytest.raises(CheckViolation):
@@ -164,4 +171,9 @@ def test_staging_repository_lifecycle_and_constraints():
     finally:
         repo.rollback_data_transaction()
         cleanup()
+        assert _count(repo, "flows", "flow_label LIKE 'task011_%'", None) == 0
+        assert _count(repo, "dex_trades", "transaction_hash LIKE 'task012_%'", None) == 0
+        assert _count(repo, "token_information", "name = %s", "TASK011_TEST_TOKEN") == 0
+        assert _count(repo, "checkpoints", "last_success_run_id IN (%s, %s, %s)", tuple(RUN_IDS)) == 0
+        assert _count(repo, "ingestion_runs", "run_id IN (%s, %s, %s)", tuple(RUN_IDS)) == 0
         repo.close()
