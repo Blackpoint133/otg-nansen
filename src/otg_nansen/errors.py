@@ -49,3 +49,11 @@ class PaginationLimitReached(NansenError):
 
 class NormalizationError(NansenError):
     """Raised when a required normalized field is malformed or missing."""
+
+
+class IncompleteSourceWindow(NansenError):
+    """Raised when a historical flow window contains incomplete records."""
+
+
+class IngestionWindowError(NansenError):
+    """Raised when a requested ingestion window is invalid or unsafe."""

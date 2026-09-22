@@ -24,7 +24,9 @@ evidence supports a primary Avalanche MVP source with Solana retained as a
 tested secondary source. Persistence and parser business logic remain later
 phases. The client contracts are represented by sanitized fixtures and strict
 shape tests; the raw-to-normalized boundary now produces immutable models with
-UTC timestamps and Decimal numeric values. Persistence remains unimplemented.
+UTC timestamps and Decimal numeric values. Staging persistence and bounded
+fixture-backed ingestion orchestration are implemented; real `$GUN` ingestion
+is not.
 Task 007 added a proposed, review-only PostgreSQL design and parameter mapping;
 the migration was not applied at that stage.
 Task 008 hardens persistence semantics with request-scope provenance,
@@ -49,3 +51,7 @@ Task 013B validated the real PostgreSQL repository and cleaned all synthetic
 integration data. The owner intentionally retains CREATE on
 `server_otg_staging` as a persistent staging-only privilege; no such privilege
 was granted on production.
+
+Task 014 adds injectable bounded orchestration from source pagination through
+normalization, audit, staging persistence, and checkpoint advancement. It uses
+no live Nansen calls; real `$GUN` ingestion remains a later task.

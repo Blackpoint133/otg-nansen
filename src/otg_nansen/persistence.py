@@ -73,7 +73,9 @@ SET status = 'success', finished_at = %s, records_received = %s,
 WHERE run_id = %s;"""
 
 INGESTION_RUN_FAILURE_SQL = """UPDATE nansen.ingestion_runs
-SET status = %s, finished_at = %s, error_type = %s, error_summary = %s
+SET status = %s, finished_at = %s, pages_requested = %s, api_calls = %s,
+    records_received = %s, records_normalized = %s,
+    error_type = %s, error_summary = %s
 WHERE run_id = %s;"""
 
 CHECKPOINT_READ_SQL = """SELECT chain, endpoint, token_address, flow_label,
@@ -309,7 +311,7 @@ class NansenRepository(Protocol):
     def store_dex_trades(self, models: list[NormalizedDexTrade]) -> None: ...
     def begin_ingestion_run(self, run: dict[str, Any]) -> None: ...
     def complete_ingestion_run(self, run_id: str, counts: dict[str, int]) -> None: ...
-    def fail_ingestion_run(self, run_id: str, error_type: str, error_summary: str, partial: bool = False) -> None: ...
+    def fail_ingestion_run(self, run_id: str, error_type: str, error_summary: str, partial: bool = False, counts: Optional[dict[str, int]] = None) -> None: ...
     def begin_data_transaction(self) -> None: ...
     def commit_data_transaction(self) -> None: ...
     def rollback_data_transaction(self) -> None: ...
@@ -431,9 +433,14 @@ class InMemoryTransactionRepository:
         _, _, runs = self._require_transaction()
         runs[run_id].update(counts, status="success", finished_at=datetime.now(timezone.utc))
 
-    def fail_ingestion_run(self, run_id: str, error_type: str, error_summary: str, partial: bool = False) -> None:
+    def fail_ingestion_run(self, run_id: str, error_type: str, error_summary: str, partial: bool = False, counts: Optional[dict[str, int]] = None) -> None:
+        counts = counts or {}
         self.ingestion_runs[run_id].update(
             status="partial" if partial else "failed",
+            pages_requested=counts.get("pages_requested", 0),
+            api_calls=counts.get("api_calls", 0),
+            records_received=counts.get("records_received", 0),
+            records_normalized=counts.get("records_normalized", 0),
             error_type=error_type,
             error_summary=error_summary,
             finished_at=datetime.now(timezone.utc),

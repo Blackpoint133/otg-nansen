@@ -188,10 +188,13 @@ class PostgresRepository:
             self.data_connection.rollback()
         self._data_transaction_active = False
 
-    def fail_ingestion_run(self, run_id: str, error_type: str, error_summary: str, partial: bool = False) -> None:
+    def fail_ingestion_run(self, run_id: str, error_type: str, error_summary: str, partial: bool = False, counts: Optional[dict[str, int]] = None) -> None:
+        counts = counts or {}
         self.audit_connection.execute(
             INGESTION_RUN_FAILURE_SQL,
-            ("partial" if partial else "failed", datetime.now().astimezone(), error_type, error_summary, run_id),
+            ("partial" if partial else "failed", datetime.now().astimezone(), counts.get("pages_requested", 0),
+             counts.get("api_calls", 0), counts.get("records_received", 0), counts.get("records_normalized", 0),
+             error_type, error_summary, run_id),
         )
 
 

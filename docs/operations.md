@@ -33,3 +33,11 @@ The checkpoint API does not accept caller-authoritative status flags. It
 requires a staged successful run with matching stream identity, and rejects
 zero-row eligibility. Flow scopes use separate successful runs and checkpoints
 for each stream. Task 013B validated these behaviors against staging.
+
+Task 014 adds no service or scheduler. Its foreground orchestrator starts a
+durable audit row, fetches all bounded pages outside the data transaction,
+normalizes and validates the complete window, then atomically persists data,
+success status, and the checkpoint. Empty complete windows advance to the
+requested end; incomplete, malformed, or out-of-window source data records a
+bounded failure. All Task 014 tests used fixtures or fakes, with zero live
+Nansen calls.

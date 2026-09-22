@@ -65,8 +65,8 @@ run is marked success inside that same transaction, or the data transaction
 rolls back and the existing run is marked failed/partial in a separate audit
 operation. SQL checks require canonical non-empty flow scope and enforce the
 empty non-flow scope representation. A successful checkpoint always references
-a run that becomes success in the same commit. Migration status is NOT
-APPLIED.
+a run that becomes success in the same commit. Migration status is applied to
+staging only and NOT APPLIED to production.
 Task 011 provides the selected psycopg3 adapter and a guarded migration
 command. The command forces `server_otg_staging`, verifies `current_database`,
 and uses bounded lock and statement timeouts. Task 013A applied the schema to
@@ -79,3 +79,9 @@ checkpoint in the same transaction. Task 013B validated the deployed schema
 with the opt-in PostgreSQL suite and removed all synthetic test rows. The
 owner-approved `gunz_user` CREATE privilege remains intentionally persistent
 on `server_otg_staging` only; no production privileges were granted.
+
+Task 014 orchestration fetches and normalizes the complete bounded source
+window before opening the data transaction. Successful flow and DEX windows
+advance their checkpoint to the requested window end; valid empty windows are
+also checkpointed. Incomplete or out-of-window records fail the run without
+persisting data. Task 014 used fixture sources only.

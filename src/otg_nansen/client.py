@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 import time
 from typing import Any, Callable, Dict, Optional
+from dataclasses import dataclass
 
 import requests
 
@@ -20,6 +21,12 @@ from .errors import (
 )
 
 RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
+
+
+@dataclass(frozen=True)
+class PaginationResult:
+    records: list[Any]
+    pages_fetched: int
 
 
 class NansenClient:
@@ -79,6 +86,10 @@ class NansenClient:
 
     def paginate(self, endpoint: str, payload: Dict[str, Any]) -> list[Any]:
         """Collect bounded pages until the response marks the final page."""
+        return self.paginate_with_metadata(endpoint, payload).records
+
+    def paginate_with_metadata(self, endpoint: str, payload: Dict[str, Any]) -> PaginationResult:
+        """Collect bounded pages and retain logical-page metadata."""
         request_payload = deepcopy(payload)
         pagination = dict(request_payload.get("pagination", {}))
         pagination.setdefault("page", 1)
@@ -97,7 +108,7 @@ class NansenClient:
                 raise ResponseContractError(f"Paginated endpoint returned invalid pagination: endpoint={endpoint}")
             records.extend(data)
             if response_pagination["is_last_page"]:
-                return records
+                return PaginationResult(records=records, pages_fetched=pages_fetched)
             pagination["page"] = int(pagination["page"]) + 1
         raise PaginationLimitReached(endpoint, pages_fetched, len(records))
 

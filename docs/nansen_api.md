@@ -62,9 +62,10 @@ a hard per-run request budget, and finite pagination. Default unit tests use
 mocks and fixtures only. Live tests are explicitly opt-in with
 `NANSEN_RUN_LIVE_TESTS=1`.
 
-Task 004 implements only `token_information`, `flows`, and `dex_trades`.
-Persistence, backfill, and business-specific event analysis are not
-implemented.
+The client implements `token_information`, `flows`, and `dex_trades`. The
+Task 014 orchestration layer uses these endpoint families through bounded
+pagination, but no live calls were made in that task. Persistence, backfill,
+and business-specific event analysis remain separate concerns.
 
 The normalization boundary is separate from the raw client. It produces
 immutable token-information, flow, and DEX-trade models. Required malformed
@@ -78,6 +79,11 @@ The corrected fixture representation is: token-information has an object in
 `data` plus `pagination`. Live verification confirmed these shapes for the
 current Avalanche diagnostic calls. The fixtures are sanitized contract
 representations, not raw response archives.
+
+Task 014 uses date payloads with UTC `from` and `to` values, deterministic
+ascending ordering fields, finite pagination, and per-run API-attempt counts.
+This orchestration behavior is fixture-verified only; real `$GUN` request
+behavior remains unverified in Task 014.
 
 ## Not verified
 

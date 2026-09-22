@@ -174,6 +174,18 @@ def test_pagination_stops_on_last_page():
     assert [call[1]["json"]["pagination"]["page"] for call in session.calls] == [1, 2]
 
 
+def test_pagination_metadata_counts_logical_pages_not_attempts():
+    responses = [
+        FakeResponse(body={"data": [1], "pagination": {"is_last_page": False}}),
+        FakeResponse(body={"data": [2], "pagination": {"is_last_page": True}}),
+    ]
+    api, _ = client(responses, max_pages=5)
+    result = api.paginate_with_metadata("/pages", {})
+    assert result.records == [1, 2]
+    assert result.pages_fetched == 2
+    assert api.requests_attempted == 2
+
+
 def test_pagination_stops_at_max_pages():
     responses = [FakeResponse(body={"data": [1], "pagination": {"is_last_page": False}}) for _ in range(2)]
     api, _ = client(responses, max_pages=2)
