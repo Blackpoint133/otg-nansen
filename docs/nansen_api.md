@@ -94,6 +94,15 @@ historical request form is an `order_by` array, represented in the client as:
 These request shapes are OFFICIAL-DOC VERIFIED and FIXTURE VERIFIED, but not
 LIVE VERIFIED by Task 014R. No standalone `order` field is sent.
 
+Task 015 live-verified the Avalanche request transport and sanitized response
+structures with exactly one attempt per endpoint. Token-information returned
+an object and normalized successfully. Flows returned a non-empty paginated
+first page with `is_complete` and `bucket_end` fields, but the current flow
+normalizer rejected the observed page; completeness is therefore not accepted
+as an ingestion contract. DEX trades returned a non-empty paginated first page
+and normalized successfully. No live response body was retained, and these
+observations do not establish complete historical ingestion behavior.
+
 ## Not verified
 
 The account plan, exact credit balance, endpoint-specific maximum historical
