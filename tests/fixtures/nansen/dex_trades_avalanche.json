@@ -5,7 +5,7 @@
     "trader_address": "0xTRADER_PLACEHOLDER",
     "trader_address_label": "Smart Trader",
     "action": "BUY",
-    "token_address": "0xTOKEN_PLACEHOLDER",
+    "token_address": "0x0000000000000000000000000000000000000001",
     "token_name": "GUN",
     "token_amount": 10.0,
     "traded_token_address": "0xTRADED_TOKEN_PLACEHOLDER",

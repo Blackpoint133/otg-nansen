@@ -2,7 +2,7 @@
   "data": {
     "name": "GUN",
     "symbol": "GUN",
-    "contract_address": "0xTOKEN_PLACEHOLDER",
+    "contract_address": "0x0000000000000000000000000000000000000001",
     "logo": "https://example.invalid/token.png",
     "token_details": {
       "token_deployment_date": "2020-01-01T00:00:00Z",

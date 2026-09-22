@@ -6,6 +6,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
 
 from .errors import NormalizationError
+from .identity import token_identity_matches
 from .models import NormalizedDexTrade, NormalizedFlowRecord, NormalizedTokenInformation
 
 
@@ -79,17 +80,13 @@ def _timestamp(record: Mapping[str, Any], field: str, context: str, required: bo
     return parsed.astimezone(timezone.utc)
 
 
-def _identity(response_address: str, requested: str, context: str) -> None:
-    if response_address.casefold() != requested.casefold():
-        raise NormalizationError(f"{context}.contract_address: does not match requested token identity")
-
-
 def normalize_token_information(response: Mapping[str, Any], *, chain: str, token_address: str) -> NormalizedTokenInformation:
     context = "token-information"
     root = _mapping(response, context)
     data = _mapping(root.get("data"), f"{context}.data")
     contract_address = _required_string(data, "contract_address", f"{context}.data")
-    _identity(contract_address, token_address, context)
+    if not token_identity_matches(chain, token_address, contract_address):
+        raise NormalizationError(f"{context}.data.contract_address: does not match requested token identity")
     details = data.get("token_details", {})
     metrics = data.get("spot_metrics", {})
     details = _mapping(details, f"{context}.token_details")
@@ -160,7 +157,8 @@ def normalize_dex_trades(response: Mapping[str, Any], *, chain: str, token_addre
         item_context = f"{context}.data[{index}]"
         item = _mapping(record, item_context)
         response_token = _required_string(item, "token_address", item_context)
-        _identity(response_token, token_address, item_context)
+        if not token_identity_matches(chain, token_address, response_token):
+            raise NormalizationError(f"{item_context}.token_address: does not match requested token identity")
         result.append(
             NormalizedDexTrade(
                 chain=chain,

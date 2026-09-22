@@ -119,3 +119,10 @@ semantics.
 Task 007 should add fixture-backed persistence design or a dry-run repository
 adapter, after external review, without writing PostgreSQL rows or performing
 historical backfill.
+
+## TASK007_CORRECTION_ADDENDUM
+
+External review found chain-agnostic casefold identity matching in the
+normalization boundary. That was suitable for Avalanche/EVM hexadecimal
+addresses but unsafe for case-sensitive Solana Base58 addresses. Task 007
+replaced it with explicit chain-aware identity semantics.

@@ -25,3 +25,5 @@ tested secondary source. Persistence and parser business logic remain later
 phases. The client contracts are represented by sanitized fixtures and strict
 shape tests; the raw-to-normalized boundary now produces immutable models with
 UTC timestamps and Decimal numeric values. Persistence remains unimplemented.
+Task 007 adds a proposed, review-only PostgreSQL design and parameter mapping;
+the migration has not been applied.

@@ -18,3 +18,25 @@ Relevant production-owned metadata observed in `server_otg.public`:
 The existing application treats these as read-only analytical sources. A
 future Nansen schema should be isolated and designed only after endpoint and
 retention decisions are approved; this task created no tables.
+
+## Proposed Nansen persistence design
+
+The following is PROPOSED / NOT YET APPLIED. The review-only artifact is
+`sql/001_create_nansen_schema.sql`; it has not been executed.
+
+The proposed isolated `nansen` schema contains:
+
+- `token_information`: immutable token-information snapshots keyed by chain,
+  token address, and UTC retrieval time;
+- `flows`: normalized flow records keyed by a deterministic source fingerprint;
+- `dex_trades`: normalized trade records keyed by a deterministic fingerprint
+  containing transaction, trader, action, token, and traded-token context;
+- `ingestion_runs`: bounded execution audit with running, success, failed, and
+  partial statuses;
+- `checkpoints`: chain/endpoint/token restart state referencing only a
+  successful ingestion run.
+
+All Decimal model values map to PostgreSQL `NUMERIC`, not floating-point
+types. All accepted datetimes map to `TIMESTAMPTZ`. Complete-window reruns are
+idempotent through deterministic flow/trade keys. Partial or failed runs
+cannot advance a checkpoint. No schema or row exists from this task.

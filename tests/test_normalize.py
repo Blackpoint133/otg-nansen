@@ -17,7 +17,7 @@ from test_client import FakeResponse, client
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "nansen"
-TOKEN_ADDRESS = "0xTOKEN_PLACEHOLDER"
+TOKEN_ADDRESS = "0x0000000000000000000000000000000000000001"
 
 
 def load(name):

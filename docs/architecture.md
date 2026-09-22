@@ -24,3 +24,8 @@ The raw API response boundary now feeds immutable normalized models for token
 information, flows, and DEX trades. Normalization validates required fields,
 preserves caller-trusted chain/token identity, uses UTC-aware timestamps, and
 uses Decimal values for token and financial numbers. No persistence exists yet.
+
+Task 007 defines, but does not apply, an isolated `nansen` PostgreSQL schema
+with snapshot, flow, trade, ingestion-run, and checkpoint tables. A future
+driver-backed repository must use parameter binding and preserve the raw-to-
+normalized boundary.
