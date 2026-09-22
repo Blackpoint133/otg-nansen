@@ -7,7 +7,7 @@ name = "otg-nansen"
 version = "0.1.0"
 description = "Bounded Nansen client foundation for OTG market-reaction research"
 requires-python = ">=3.10"
-dependencies = ["requests>=2.31,<3"]
+dependencies = ["requests>=2.31,<3", "psycopg[binary]>=3.2,<4"]
 
 [project.optional-dependencies]
 test = ["pytest>=8,<9"]
@@ -15,4 +15,4 @@ test = ["pytest>=8,<9"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-markers = ["live: opt-in live Nansen API contract checks"]
+markers = ["live: opt-in live Nansen API contract checks", "postgres: opt-in staging PostgreSQL integration checks"]

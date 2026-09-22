@@ -40,3 +40,7 @@ addresses are lowercase at the persistence boundary, Solana addresses remain
 case-sensitive, flow scopes are trimmed and required, and successful data,
 checkpoint, and audit status commit atomically. Migration status remains NOT
 APPLIED.
+Task 011 adds a psycopg3 repository adapter and a staging-only migration
+command. The migration is guarded to `server_otg_staging` and remains pending
+until the database role has the required CREATE privilege. Production is not
+connected or modified.

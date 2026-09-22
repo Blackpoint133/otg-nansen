@@ -66,3 +66,7 @@ operation. SQL checks require canonical non-empty flow scope and enforce the
 empty non-flow scope representation. A successful checkpoint always references
 a run that becomes success in the same commit. Migration status is NOT
 APPLIED.
+Task 011 provides the selected psycopg3 adapter and a guarded migration
+command. The command forces `server_otg_staging`, verifies `current_database`,
+and uses bounded lock and statement timeouts. The migration remains NOT
+APPLIED pending staging CREATE permission.

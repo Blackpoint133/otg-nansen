@@ -88,6 +88,11 @@ CREATE TABLE nansen.ingestion_runs (
         OR (endpoint <> 'flows' AND flow_label = '')
     ),
     CHECK (
+        request_scope ? 'chain'
+        AND request_scope ? 'endpoint'
+        AND request_scope ? 'token_address'
+        AND request_scope ? 'flow_label'
+        AND
         request_scope->>'chain' = chain
         AND request_scope->>'endpoint' = endpoint
         AND request_scope->>'token_address' = token_address

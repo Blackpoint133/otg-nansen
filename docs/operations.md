@@ -22,3 +22,7 @@ their scoped checkpoint commit together, while a failed or partial run rolls
 back both and records failure in the already-created audit row. Success status
 is staged with data and checkpoint, removing the post-commit running-state
 window. The migration remains review-only and NOT APPLIED.
+The guarded staging command is `python -m otg_nansen.migrate_staging`; it
+refuses any database other than `server_otg_staging`. PostgreSQL integration
+tests are opt-in with `NANSEN_RUN_POSTGRES_TESTS=1`; default pytest remains
+database-free.

@@ -42,3 +42,6 @@ chain, token, scope, and date; DEX trade identity excludes mutable enrichment.
 Persistence identity canonicalizes Avalanche EVM addresses to lowercase while
 preserving exact Solana and unknown-chain values. Flow scope is trimmed once
 at normalization and reused by all persistence mappings.
+Task 011 adds a psycopg3 repository adapter with separate durable-audit and
+atomic data/checkpoint/success connections. The staging migration command is
+database-pinned and has not been applied while permissions are pending.
