@@ -41,7 +41,7 @@ CREATE TABLE nansen.flows (
     total_inflows_dex BIGINT,
     total_outflows_cex BIGINT,
     total_outflows_dex BIGINT,
-    UNIQUE (chain, token_address, flow_label, date, flow_key)
+    CHECK (flow_label <> '')
 );
 
 CREATE TABLE nansen.dex_trades (
@@ -60,8 +60,7 @@ CREATE TABLE nansen.dex_trades (
     traded_token_name TEXT NOT NULL,
     traded_token_amount NUMERIC NOT NULL,
     estimated_swap_price_usd NUMERIC NOT NULL,
-    estimated_value_usd NUMERIC NOT NULL,
-    UNIQUE (chain, transaction_hash, trader_address, action, token_address, traded_token_address, trade_key)
+    estimated_value_usd NUMERIC NOT NULL
 );
 
 CREATE TABLE nansen.ingestion_runs (

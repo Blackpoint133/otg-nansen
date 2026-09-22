@@ -4,10 +4,92 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
+from decimal import Decimal
 from typing import Any, Optional, Protocol
 
 from .errors import NansenError
 from .models import NormalizedDexTrade, NormalizedFlowRecord, NormalizedTokenInformation
+
+
+TOKEN_INFORMATION_INSERT_SQL = """INSERT INTO nansen.token_information (
+    chain, token_address, retrieved_at, name, symbol, market_cap_usd,
+    fdv_usd, circulating_supply, total_supply, volume_total_usd,
+    buy_volume_usd, sell_volume_usd, total_buys, total_sells,
+    unique_buyers, unique_sellers, liquidity_usd, total_holders
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+ON CONFLICT (chain, token_address, retrieved_at) DO NOTHING;"""
+
+FLOW_UPSERT_SQL = """INSERT INTO nansen.flows (
+    flow_key, chain, token_address, date, price_usd, token_amount, value_usd,
+    holders_count, total_inflows_count, total_outflows_count, flow_label,
+    bucket_end, is_complete, total_inflows_cex, total_inflows_dex,
+    total_outflows_cex, total_outflows_dex
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+ON CONFLICT (flow_key) DO UPDATE SET
+    date = EXCLUDED.date,
+    price_usd = EXCLUDED.price_usd,
+    token_amount = EXCLUDED.token_amount,
+    value_usd = EXCLUDED.value_usd,
+    holders_count = EXCLUDED.holders_count,
+    total_inflows_count = EXCLUDED.total_inflows_count,
+    total_outflows_count = EXCLUDED.total_outflows_count,
+    bucket_end = EXCLUDED.bucket_end,
+    is_complete = CASE
+        WHEN nansen.flows.is_complete IS TRUE OR EXCLUDED.is_complete IS TRUE THEN TRUE
+        ELSE EXCLUDED.is_complete
+    END,
+    total_inflows_cex = EXCLUDED.total_inflows_cex,
+    total_inflows_dex = EXCLUDED.total_inflows_dex,
+    total_outflows_cex = EXCLUDED.total_outflows_cex,
+    total_outflows_dex = EXCLUDED.total_outflows_dex
+WHERE nansen.flows.is_complete IS NOT TRUE OR EXCLUDED.is_complete IS TRUE;"""
+
+DEX_TRADE_UPSERT_SQL = """INSERT INTO nansen.dex_trades (
+    trade_key, chain, requested_token_address, block_timestamp,
+    transaction_hash, trader_address, trader_address_label, action,
+    token_address, token_name, token_amount, traded_token_address,
+    traded_token_name, traded_token_amount, estimated_swap_price_usd,
+    estimated_value_usd
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+ON CONFLICT (trade_key) DO UPDATE SET
+    trader_address_label = EXCLUDED.trader_address_label,
+    token_name = EXCLUDED.token_name,
+    traded_token_name = EXCLUDED.traded_token_name,
+    estimated_swap_price_usd = EXCLUDED.estimated_swap_price_usd,
+    estimated_value_usd = EXCLUDED.estimated_value_usd;"""
+
+INGESTION_RUN_INSERT_SQL = """INSERT INTO nansen.ingestion_runs (
+    run_id, started_at, status, chain, endpoint, token_address, flow_label,
+    request_scope, window_start, window_end, pages_requested, api_calls,
+    records_received, records_normalized, records_inserted,
+    records_updated_or_conflicted, error_type, error_summary
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"""
+
+INGESTION_RUN_SUCCESS_SQL = """UPDATE nansen.ingestion_runs
+SET status = 'success', finished_at = %s, records_received = %s,
+    records_normalized = %s, records_inserted = %s,
+    records_updated_or_conflicted = %s, error_type = NULL, error_summary = NULL
+WHERE run_id = %s;"""
+
+INGESTION_RUN_FAILURE_SQL = """UPDATE nansen.ingestion_runs
+SET status = %s, finished_at = %s, error_type = %s, error_summary = %s
+WHERE run_id = %s;"""
+
+CHECKPOINT_READ_SQL = """SELECT chain, endpoint, token_address, flow_label,
+    last_complete_timestamp, last_success_run_id, updated_at, metadata
+FROM nansen.checkpoints
+WHERE chain = %s AND endpoint = %s AND token_address = %s AND flow_label = %s;"""
+
+CHECKPOINT_UPSERT_SQL = """INSERT INTO nansen.checkpoints (
+    chain, endpoint, token_address, flow_label, last_complete_timestamp,
+    last_success_run_id, updated_at, metadata
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+ON CONFLICT (chain, endpoint, token_address, flow_label) DO UPDATE SET
+    last_complete_timestamp = EXCLUDED.last_complete_timestamp,
+    last_success_run_id = EXCLUDED.last_success_run_id,
+    updated_at = EXCLUDED.updated_at,
+    metadata = EXCLUDED.metadata
+WHERE EXCLUDED.last_complete_timestamp >= nansen.checkpoints.last_complete_timestamp;"""
 
 
 class PersistenceDesignError(NansenError):
@@ -23,7 +105,16 @@ def _utc(value: datetime, field: str) -> datetime:
 def _canonical_value(value: Any) -> Any:
     if isinstance(value, datetime):
         return _utc(value, "timestamp").isoformat().replace("+00:00", "Z")
-    if hasattr(value, "as_tuple"):
+    if isinstance(value, Decimal):
+        if not value.is_finite():
+            raise PersistenceDesignError("identity Decimal must be finite")
+        if value.is_zero():
+            return "0"
+        text = format(value.normalize(), "f")
+        if "." in text:
+            text = text.rstrip("0").rstrip(".")
+        return text
+    if isinstance(value, int) and not isinstance(value, bool):
         return str(value)
     if isinstance(value, dict):
         return {key: _canonical_value(item) for key, item in sorted(value.items())}
@@ -37,9 +128,17 @@ def _fingerprint(values: dict[str, Any]) -> str:
     return sha256(encoded.encode("utf-8")).hexdigest()
 
 
+def canonical_request_scope(endpoint: str, flow_label: Optional[str] = None) -> str:
+    if endpoint == "flows":
+        if not isinstance(flow_label, str) or not flow_label.strip():
+            raise PersistenceDesignError("flows requires a non-empty flow_label scope")
+        return flow_label
+    return ""
+
+
 def checkpoint_stream_key(chain: str, endpoint: str, token_address: str, flow_label: Optional[str] = None) -> tuple[str, str, str, str]:
     """Return a checkpoint identity that separates flow request scopes."""
-    return chain, endpoint, token_address, flow_label or ""
+    return chain, endpoint, token_address, canonical_request_scope(endpoint, flow_label)
 
 
 def map_token_information(model: NormalizedTokenInformation, retrieved_at: datetime) -> dict[str, Any]:
@@ -87,9 +186,8 @@ def map_flow(model: NormalizedFlowRecord) -> dict[str, Any]:
     payload["flow_key"] = _fingerprint({
         "chain": model.chain,
         "token_address": model.token_address,
-        "flow_label": model.flow_label or "",
+        "flow_label": model.flow_label,
         "date": model.date,
-        "bucket_end": model.bucket_end,
     })
     return payload
 
@@ -149,6 +247,7 @@ def map_ingestion_run(
 ) -> dict[str, Any]:
     if status not in {"running", "success", "failed", "partial"}:
         raise PersistenceDesignError("invalid ingestion run status")
+    scope = canonical_request_scope(endpoint, flow_label)
     return {
         "run_id": run_id,
         "started_at": _utc(started_at, "started_at"),
@@ -156,8 +255,8 @@ def map_ingestion_run(
         "chain": chain,
         "endpoint": endpoint,
         "token_address": token_address,
-        "flow_label": flow_label,
-        "request_scope": {"chain": chain, "endpoint": endpoint, "token_address": token_address, "flow_label": flow_label or ""},
+        "flow_label": scope,
+        "request_scope": {"chain": chain, "endpoint": endpoint, "token_address": token_address, "flow_label": scope},
         "window_start": _utc(window_start, "window_start") if window_start else None,
         "window_end": _utc(window_end, "window_end") if window_end else None,
         "pages_requested": pages_requested,
@@ -176,8 +275,17 @@ def validate_checkpoint_advance(status: str, complete: bool) -> None:
         raise PersistenceDesignError("checkpoint may advance only after a complete successful run")
 
 
+def merge_flow_completeness(existing: Optional[bool], incoming: Optional[bool]) -> Optional[bool]:
+    """Return the database-equivalent completeness merge for a flow row."""
+    if existing is True:
+        return True
+    if incoming is True:
+        return True
+    return incoming
+
+
 class NansenRepository(Protocol):
-    """Future driver-backed repository boundary; no implementation connects here."""
+    """Future driver boundary; audit writes are separate from data transactions."""
 
     def store_token_information(self, model: NormalizedTokenInformation, retrieved_at: datetime) -> None: ...
     def store_flows(self, models: list[NormalizedFlowRecord]) -> None: ...
@@ -185,6 +293,9 @@ class NansenRepository(Protocol):
     def begin_ingestion_run(self, run: dict[str, Any]) -> None: ...
     def complete_ingestion_run(self, run_id: str, counts: dict[str, int]) -> None: ...
     def fail_ingestion_run(self, run_id: str, error_type: str, error_summary: str, partial: bool = False) -> None: ...
+    def begin_data_transaction(self) -> None: ...
+    def commit_data_transaction(self) -> None: ...
+    def rollback_data_transaction(self) -> None: ...
     def read_checkpoint(self, chain: str, endpoint: str, token_address: str, flow_label: Optional[str] = None) -> Optional[dict[str, Any]]: ...
     def advance_checkpoint(self, chain: str, endpoint: str, token_address: str, last_complete_timestamp: datetime, run_id: str, status: str, complete: bool, flow_label: Optional[str] = None) -> None: ...
 
@@ -218,3 +329,93 @@ class InMemoryCheckpointRepository:
             "last_success_run_id": run_id,
             "updated_at": datetime.now(timezone.utc),
         }
+
+
+@dataclass
+class InMemoryTransactionRepository:
+    """Deterministic lifecycle double; audit state survives data rollback."""
+
+    data: dict[str, dict[str, Any]]
+    checkpoints: dict[tuple[str, str, str, str], dict[str, Any]]
+    ingestion_runs: dict[str, dict[str, Any]]
+    _staged_data: Optional[dict[str, dict[str, Any]]]
+    _staged_checkpoints: Optional[dict[tuple[str, str, str, str], dict[str, Any]]]
+
+    def __init__(self) -> None:
+        self.data = {"flows": {}, "dex_trades": {}, "token_information": {}}
+        self.checkpoints = {}
+        self.ingestion_runs = {}
+        self._staged_data = None
+        self._staged_checkpoints = None
+
+    def begin_ingestion_run(self, run: dict[str, Any]) -> None:
+        if run["status"] != "running":
+            raise PersistenceDesignError("ingestion audit must start in running state")
+        self.ingestion_runs[run["run_id"]] = dict(run)
+
+    def begin_data_transaction(self) -> None:
+        if self._staged_data is not None:
+            raise PersistenceDesignError("data transaction already active")
+        self._staged_data = {name: dict(values) for name, values in self.data.items()}
+        self._staged_checkpoints = dict(self.checkpoints)
+
+    def _require_transaction(self) -> tuple[dict[str, dict[str, Any]], dict[tuple[str, str, str, str], dict[str, Any]]]:
+        if self._staged_data is None or self._staged_checkpoints is None:
+            raise PersistenceDesignError("data transaction is not active")
+        return self._staged_data, self._staged_checkpoints
+
+    def store_flows(self, models: list[NormalizedFlowRecord]) -> None:
+        staged, _ = self._require_transaction()
+        for model in models:
+            payload = map_flow(model)
+            staged["flows"][payload["flow_key"]] = payload
+
+    def store_dex_trades(self, models: list[NormalizedDexTrade]) -> None:
+        staged, _ = self._require_transaction()
+        for model in models:
+            payload = map_dex_trade(model)
+            staged["dex_trades"][payload["trade_key"]] = payload
+
+    def store_token_information(self, model: NormalizedTokenInformation, retrieved_at: datetime) -> None:
+        staged, _ = self._require_transaction()
+        payload = map_token_information(model, retrieved_at)
+        key = (payload["chain"], payload["token_address"], payload["retrieved_at"])
+        staged["token_information"][key] = payload
+
+    def advance_checkpoint(
+        self, chain: str, endpoint: str, token_address: str,
+        last_complete_timestamp: datetime, run_id: str, status: str,
+        complete: bool, flow_label: Optional[str] = None,
+    ) -> None:
+        _, checkpoints = self._require_transaction()
+        validate_checkpoint_advance(status, complete)
+        checkpoints[checkpoint_stream_key(chain, endpoint, token_address, flow_label)] = {
+            "last_complete_timestamp": _utc(last_complete_timestamp, "last_complete_timestamp"),
+            "last_success_run_id": run_id,
+            "updated_at": datetime.now(timezone.utc),
+        }
+
+    def read_checkpoint(self, chain: str, endpoint: str, token_address: str, flow_label: Optional[str] = None) -> Optional[dict[str, Any]]:
+        return self.checkpoints.get(checkpoint_stream_key(chain, endpoint, token_address, flow_label))
+
+    def commit_data_transaction(self) -> None:
+        staged, checkpoints = self._require_transaction()
+        self.data = staged
+        self.checkpoints = checkpoints
+        self._staged_data = None
+        self._staged_checkpoints = None
+
+    def rollback_data_transaction(self) -> None:
+        self._staged_data = None
+        self._staged_checkpoints = None
+
+    def complete_ingestion_run(self, run_id: str, counts: dict[str, int]) -> None:
+        self.ingestion_runs[run_id].update(counts, status="success", finished_at=datetime.now(timezone.utc))
+
+    def fail_ingestion_run(self, run_id: str, error_type: str, error_summary: str, partial: bool = False) -> None:
+        self.ingestion_runs[run_id].update(
+            status="partial" if partial else "failed",
+            error_type=error_type,
+            error_summary=error_summary,
+            finished_at=datetime.now(timezone.utc),
+        )

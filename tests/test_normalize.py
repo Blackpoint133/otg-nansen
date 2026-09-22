@@ -55,7 +55,7 @@ def test_token_information_rejects_identity_mismatch():
 
 
 def test_flows_normalize_and_convert_to_utc():
-    model = normalize_flows(load("flows_avalanche.json"), chain="avalanche", token_address=TOKEN_ADDRESS)[0]
+    model = normalize_flows(load("flows_avalanche.json"), chain="avalanche", token_address=TOKEN_ADDRESS, flow_label="smart_money")[0]
     assert isinstance(model, NormalizedFlowRecord)
     assert model.date.tzinfo is timezone.utc
     assert model.price_usd == Decimal("0.01")
@@ -67,13 +67,19 @@ def test_flows_convert_positive_and_negative_offsets():
     response = load("flows_avalanche.json")
     response["data"][0]["date"] = "2026-09-20T14:00:00+02:00"
     response["data"][0]["bucket_end"] = "2026-09-20T07:00:00-05:00"
-    model = normalize_flows(response, chain="avalanche", token_address=TOKEN_ADDRESS)[0]
+    model = normalize_flows(response, chain="avalanche", token_address=TOKEN_ADDRESS, flow_label="smart_money")[0]
     assert model.date.isoformat() == "2026-09-20T12:00:00+00:00"
     assert model.bucket_end.isoformat() == "2026-09-20T12:00:00+00:00"
 
 
 def test_empty_solana_flows_are_valid():
-    assert normalize_flows(load("flows_solana_empty.json"), chain="solana", token_address="SOL_TOKEN") == []
+    assert normalize_flows(load("flows_solana_empty.json"), chain="solana", token_address="SOL_TOKEN", flow_label="smart_money") == []
+
+
+@pytest.mark.parametrize("label", [None, "", "   "])
+def test_flows_require_explicit_non_empty_scope(label):
+    with pytest.raises(NormalizationError, match="flow_label"):
+        normalize_flows(load("flows_avalanche.json"), chain="avalanche", token_address=TOKEN_ADDRESS, flow_label=label)
 
 
 @pytest.mark.parametrize("field,value", [("price_usd", "bad"), ("token_amount", "NaN"), ("value_usd", "Infinity")])
@@ -81,7 +87,7 @@ def test_flows_reject_invalid_numeric_values(field, value):
     response = load("flows_avalanche.json")
     response["data"][0][field] = value
     with pytest.raises(NormalizationError):
-        normalize_flows(response, chain="avalanche", token_address=TOKEN_ADDRESS)
+        normalize_flows(response, chain="avalanche", token_address=TOKEN_ADDRESS, flow_label="smart_money")
 
 
 @pytest.mark.parametrize("timestamp", ["not-a-time", "2026-09-20T12:00:00"])
@@ -89,17 +95,17 @@ def test_flows_reject_malformed_or_naive_timestamps(timestamp):
     response = load("flows_avalanche.json")
     response["data"][0]["date"] = timestamp
     with pytest.raises(NormalizationError):
-        normalize_flows(response, chain="avalanche", token_address=TOKEN_ADDRESS)
+        normalize_flows(response, chain="avalanche", token_address=TOKEN_ADDRESS, flow_label="smart_money")
 
 
 def test_flows_reject_missing_or_non_object_records():
     response = load("flows_avalanche.json")
     response["data"][0].pop("value_usd")
     with pytest.raises(NormalizationError, match="value_usd"):
-        normalize_flows(response, chain="avalanche", token_address=TOKEN_ADDRESS)
+        normalize_flows(response, chain="avalanche", token_address=TOKEN_ADDRESS, flow_label="smart_money")
     response["data"] = ["bad"]
     with pytest.raises(NormalizationError):
-        normalize_flows(response, chain="avalanche", token_address=TOKEN_ADDRESS)
+        normalize_flows(response, chain="avalanche", token_address=TOKEN_ADDRESS, flow_label="smart_money")
 
 
 def test_dex_trade_normalizes_and_preserves_source_action():

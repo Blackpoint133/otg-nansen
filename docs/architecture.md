@@ -35,3 +35,7 @@ checkpoint provenance, while flow keys exclude mutable measurements. DEX trade
 keys exclude mutable labels and USD estimates while retaining transaction and
 swap identity. Repository lifecycle methods are designed around one
 transaction per ingestion run.
+The final proposed lifecycle instead uses a durable audit start, one atomic
+data/checkpoint transaction, and a durable audit success or failure update.
+Migration status is NOT APPLIED. Flow scope is mandatory and flow identity is
+chain, token, scope, and date; DEX trade identity excludes mutable enrichment.

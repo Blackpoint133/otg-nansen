@@ -87,3 +87,19 @@ ENV_TRACKED=NO
 Task 009 should perform an isolated driver-specific dry-run against a temporary
 database or SQL harness only after review. Existing OTG databases must remain
 untouched.
+
+## TASK 009 ADDENDUM
+
+External review found remaining issues in the published Task 008 design:
+flow scope was optional; Decimal identity encoding was not canonical across
+equivalent representations; `bucket_end` participation in flow identity was
+unproven; migration SQL retained redundant primary-key-inclusive UNIQUE
+constraints; concrete parameterized UPSERT SQL was missing; complete flow
+records lacked database-level downgrade protection; and the audit/data
+transaction lifecycle could lose failed audit state during rollback.
+
+Task 009 corrected these issues before any migration execution. Flow scope is
+now explicit and non-empty, stable keys use canonical Decimal encoding and
+exclude unproven mutable identity, SQL contains parameterized insert/upsert
+templates with complete-flow protection, and the in-memory lifecycle double
+separates durable audit state from atomic data/checkpoint changes.

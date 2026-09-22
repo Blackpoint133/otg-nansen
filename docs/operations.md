@@ -15,6 +15,9 @@ queries, record ingestion status, and advance checkpoints only after complete
 successful ingestion. No PostgreSQL connection or migration is part of the
 current project.
 
-Each future ingestion run must retain token and request scope, including the
-flow label when applicable. A failed or partial transaction must not advance
-the corresponding scoped checkpoint. The migration remains review-only.
+Each future ingestion run must retain token and request scope; flow ingestion
+requires a non-empty flow label. The audit start and final audit update are
+durable operations separate from the data transaction. Normalized rows and
+their scoped checkpoint commit together, while a failed or partial run rolls
+back both and records failure in the already-created audit row. The migration
+remains review-only and NOT APPLIED.

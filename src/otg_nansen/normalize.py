@@ -117,9 +117,11 @@ def normalize_flows(
     *,
     chain: str,
     token_address: str,
-    flow_label: Optional[str] = None,
+    flow_label: str,
 ) -> list[NormalizedFlowRecord]:
     context = "flows"
+    if not isinstance(flow_label, str) or not flow_label.strip():
+        raise NormalizationError(f"{context}.flow_label: expected non-empty string")
     root = _mapping(response, context)
     data = root.get("data")
     if not isinstance(data, list):

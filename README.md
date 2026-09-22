@@ -29,3 +29,9 @@ Task 007 adds a proposed, review-only PostgreSQL design and parameter mapping;
 the migration has not been applied.
 Task 008 hardens persistence semantics with request-scope provenance,
 canonical stable keys, and separate checkpoint streams for flow labels.
+Task 009 finalizes the proposed persistence boundary: flows require an
+explicit non-empty scope, equivalent Decimal key values canonicalize alike,
+flow keys exclude unproven bucket observations, and parameterized upserts
+protect complete records from incomplete downgrades. Audit lifecycle state is
+durable separately from the data/checkpoint transaction. Migration status is
+NOT APPLIED.

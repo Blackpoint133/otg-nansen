@@ -41,13 +41,23 @@ types. All accepted datetimes map to `TIMESTAMPTZ`. Complete-window reruns are
 idempotent through deterministic flow/trade keys. Partial or failed runs
 cannot advance a checkpoint. No schema or row exists from this task.
 
-Task 008 adds `flow_label` and request-scope provenance to flow/run records.
+Task 009 makes `flow_label` a required non-empty scope for flow normalization
+and request provenance. Checkpoint identity is `(chain, endpoint,
+token_address, flow_label)` so separate flow-label streams cannot overwrite
+one another. Flow keys use only stable chain/token/scope/date identity; the
+unproven `bucket_end` and all mutable observations are excluded. DEX trade
+keys use stable swap dimensions with canonical Decimal encoding and exclude
+mutable enrichment.
 Checkpoint identity is `(chain, endpoint, token_address, flow_label)` so
 separate flow-label streams cannot overwrite one another. Flow keys use only
 stable scope/time identity fields and DEX trade keys use transaction/trader/
 swap identity; mutable labels, names, and USD estimates are excluded.
 
-The repository lifecycle is intended to run in one database transaction:
-begin a run, upsert normalized rows, mark the run success or failure, and
-advance a checkpoint only after complete success. Rollback preserves the prior
-checkpoint and prevents partial data from being marked complete.
+Token snapshots use `(chain, token_address, retrieved_at)` and duplicate
+snapshots are ignored. Parameterized flow and trade upserts are reviewable in
+the persistence module. A complete flow cannot be downgraded by a later
+incomplete observation. The audit lifecycle is separate: a committed running
+row is created first; data and checkpoint changes commit atomically; then the
+run is marked success, or the data transaction rolls back and the existing
+run is marked failed/partial in a separate audit operation. Migration status
+is NOT APPLIED.
