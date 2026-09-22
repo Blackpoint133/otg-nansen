@@ -14,3 +14,7 @@ in-memory checkpoint double. A later implementation must use parameterized
 queries, record ingestion status, and advance checkpoints only after complete
 successful ingestion. No PostgreSQL connection or migration is part of the
 current project.
+
+Each future ingestion run must retain token and request scope, including the
+flow label when applicable. A failed or partial transaction must not advance
+the corresponding scoped checkpoint. The migration remains review-only.

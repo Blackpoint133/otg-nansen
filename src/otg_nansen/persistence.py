@@ -20,9 +20,26 @@ def _utc(value: datetime, field: str) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+def _canonical_value(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return _utc(value, "timestamp").isoformat().replace("+00:00", "Z")
+    if hasattr(value, "as_tuple"):
+        return str(value)
+    if isinstance(value, dict):
+        return {key: _canonical_value(item) for key, item in sorted(value.items())}
+    if isinstance(value, (list, tuple)):
+        return [_canonical_value(item) for item in value]
+    return value
+
+
 def _fingerprint(values: dict[str, Any]) -> str:
-    encoded = json.dumps(values, sort_keys=True, separators=(",", ":"), default=str)
+    encoded = json.dumps(_canonical_value(values), sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def checkpoint_stream_key(chain: str, endpoint: str, token_address: str, flow_label: Optional[str] = None) -> tuple[str, str, str, str]:
+    """Return a checkpoint identity that separates flow request scopes."""
+    return chain, endpoint, token_address, flow_label or ""
 
 
 def map_token_information(model: NormalizedTokenInformation, retrieved_at: datetime) -> dict[str, Any]:
@@ -65,8 +82,15 @@ def map_flow(model: NormalizedFlowRecord) -> dict[str, Any]:
         "total_inflows_dex": model.total_inflows_dex,
         "total_outflows_cex": model.total_outflows_cex,
         "total_outflows_dex": model.total_outflows_dex,
+        "flow_label": model.flow_label,
     }
-    payload["flow_key"] = _fingerprint({key: str(value) for key, value in payload.items()})
+    payload["flow_key"] = _fingerprint({
+        "chain": model.chain,
+        "token_address": model.token_address,
+        "flow_label": model.flow_label or "",
+        "date": model.date,
+        "bucket_end": model.bucket_end,
+    })
     return payload
 
 
@@ -88,8 +112,63 @@ def map_dex_trade(model: NormalizedDexTrade) -> dict[str, Any]:
         "estimated_swap_price_usd": model.estimated_swap_price_usd,
         "estimated_value_usd": model.estimated_value_usd,
     }
-    payload["trade_key"] = _fingerprint({key: str(value) for key, value in payload.items()})
+    payload["trade_key"] = _fingerprint({
+        "chain": model.chain,
+        "requested_token_address": model.requested_token_address,
+        "block_timestamp": model.block_timestamp,
+        "transaction_hash": model.transaction_hash,
+        "trader_address": model.trader_address,
+        "action": model.action,
+        "token_address": model.token_address,
+        "token_amount": model.token_amount,
+        "traded_token_address": model.traded_token_address,
+        "traded_token_amount": model.traded_token_amount,
+    })
     return payload
+
+
+def map_ingestion_run(
+    *,
+    run_id: str,
+    started_at: datetime,
+    status: str,
+    chain: str,
+    endpoint: str,
+    token_address: str,
+    flow_label: Optional[str] = None,
+    window_start: Optional[datetime] = None,
+    window_end: Optional[datetime] = None,
+    pages_requested: int = 0,
+    api_calls: int = 0,
+    records_received: int = 0,
+    records_normalized: int = 0,
+    records_inserted: int = 0,
+    records_updated_or_conflicted: int = 0,
+    error_type: Optional[str] = None,
+    error_summary: Optional[str] = None,
+) -> dict[str, Any]:
+    if status not in {"running", "success", "failed", "partial"}:
+        raise PersistenceDesignError("invalid ingestion run status")
+    return {
+        "run_id": run_id,
+        "started_at": _utc(started_at, "started_at"),
+        "status": status,
+        "chain": chain,
+        "endpoint": endpoint,
+        "token_address": token_address,
+        "flow_label": flow_label,
+        "request_scope": {"chain": chain, "endpoint": endpoint, "token_address": token_address, "flow_label": flow_label or ""},
+        "window_start": _utc(window_start, "window_start") if window_start else None,
+        "window_end": _utc(window_end, "window_end") if window_end else None,
+        "pages_requested": pages_requested,
+        "api_calls": api_calls,
+        "records_received": records_received,
+        "records_normalized": records_normalized,
+        "records_inserted": records_inserted,
+        "records_updated_or_conflicted": records_updated_or_conflicted,
+        "error_type": error_type,
+        "error_summary": error_summary,
+    }
 
 
 def validate_checkpoint_advance(status: str, complete: bool) -> None:
@@ -103,20 +182,24 @@ class NansenRepository(Protocol):
     def store_token_information(self, model: NormalizedTokenInformation, retrieved_at: datetime) -> None: ...
     def store_flows(self, models: list[NormalizedFlowRecord]) -> None: ...
     def store_dex_trades(self, models: list[NormalizedDexTrade]) -> None: ...
-    def read_checkpoint(self, chain: str, endpoint: str, token_address: str) -> Optional[dict[str, Any]]: ...
+    def begin_ingestion_run(self, run: dict[str, Any]) -> None: ...
+    def complete_ingestion_run(self, run_id: str, counts: dict[str, int]) -> None: ...
+    def fail_ingestion_run(self, run_id: str, error_type: str, error_summary: str, partial: bool = False) -> None: ...
+    def read_checkpoint(self, chain: str, endpoint: str, token_address: str, flow_label: Optional[str] = None) -> Optional[dict[str, Any]]: ...
+    def advance_checkpoint(self, chain: str, endpoint: str, token_address: str, last_complete_timestamp: datetime, run_id: str, status: str, complete: bool, flow_label: Optional[str] = None) -> None: ...
 
 
 @dataclass
 class InMemoryCheckpointRepository:
     """Tiny test double for checkpoint invariants, not a database adapter."""
 
-    checkpoints: dict[tuple[str, str, str], dict[str, Any]]
+    checkpoints: dict[tuple[str, str, str, str], dict[str, Any]]
 
     def __init__(self) -> None:
         self.checkpoints = {}
 
-    def read_checkpoint(self, chain: str, endpoint: str, token_address: str) -> Optional[dict[str, Any]]:
-        return self.checkpoints.get((chain, endpoint, token_address))
+    def read_checkpoint(self, chain: str, endpoint: str, token_address: str, flow_label: Optional[str] = None) -> Optional[dict[str, Any]]:
+        return self.checkpoints.get(checkpoint_stream_key(chain, endpoint, token_address, flow_label))
 
     def advance_checkpoint(
         self,
@@ -127,9 +210,10 @@ class InMemoryCheckpointRepository:
         run_id: str,
         status: str,
         complete: bool,
+        flow_label: Optional[str] = None,
     ) -> None:
         validate_checkpoint_advance(status, complete)
-        self.checkpoints[(chain, endpoint, token_address)] = {
+        self.checkpoints[checkpoint_stream_key(chain, endpoint, token_address, flow_label)] = {
             "last_complete_timestamp": _utc(last_complete_timestamp, "last_complete_timestamp"),
             "last_success_run_id": run_id,
             "updated_at": datetime.now(timezone.utc),

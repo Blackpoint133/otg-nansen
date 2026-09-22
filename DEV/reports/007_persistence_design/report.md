@@ -129,3 +129,12 @@ duplicate semantics should be confirmed before production-scale ingestion.
 Task 008 should perform a driver-specific dry-run repository test using a
 temporary isolated database or SQL inspection harness, only after review and
 without touching existing OTG databases.
+
+## TASK008_ADDENDUM
+
+Task 008 hardened the design without applying it. Flow request labels and
+token scope are now retained in ingestion provenance and checkpoint identity.
+Stable flow keys exclude mutable measurements; stable DEX trade keys exclude
+mutable enrichment and USD estimates. Canonical JSON key encoding and a full
+repository lifecycle protocol were added, and the migration was updated but
+not executed.

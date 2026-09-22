@@ -58,6 +58,7 @@ class NormalizedFlowRecord:
     holders_count: int
     total_inflows_count: int
     total_outflows_count: int
+    flow_label: Optional[str] = None
     bucket_end: Optional[datetime] = None
     is_complete: Optional[bool] = None
     total_inflows_cex: Optional[int] = None

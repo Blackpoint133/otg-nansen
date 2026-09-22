@@ -112,7 +112,13 @@ def normalize_token_information(response: Mapping[str, Any], *, chain: str, toke
     )
 
 
-def normalize_flows(response: Mapping[str, Any], *, chain: str, token_address: str) -> list[NormalizedFlowRecord]:
+def normalize_flows(
+    response: Mapping[str, Any],
+    *,
+    chain: str,
+    token_address: str,
+    flow_label: Optional[str] = None,
+) -> list[NormalizedFlowRecord]:
     context = "flows"
     root = _mapping(response, context)
     data = root.get("data")
@@ -122,11 +128,17 @@ def normalize_flows(response: Mapping[str, Any], *, chain: str, token_address: s
     for index, record in enumerate(data):
         item_context = f"{context}.data[{index}]"
         item = _mapping(record, item_context)
-        result.append(_normalize_flow(item, chain, token_address, item_context))
+        result.append(_normalize_flow(item, chain, token_address, flow_label, item_context))
     return result
 
 
-def _normalize_flow(item: Mapping[str, Any], chain: str, token_address: str, context: str) -> NormalizedFlowRecord:
+def _normalize_flow(
+    item: Mapping[str, Any],
+    chain: str,
+    token_address: str,
+    flow_label: Optional[str],
+    context: str,
+) -> NormalizedFlowRecord:
     return NormalizedFlowRecord(
         chain=chain,
         token_address=token_address,
@@ -137,6 +149,7 @@ def _normalize_flow(item: Mapping[str, Any], chain: str, token_address: str, con
         holders_count=_integer(item, "holders_count", context),
         total_inflows_count=_integer(item, "total_inflows_count", context),
         total_outflows_count=_integer(item, "total_outflows_count", context),
+        flow_label=flow_label,
         bucket_end=_timestamp(item, "bucket_end", context, False),
         is_complete=_boolean(item, "is_complete", context),
         total_inflows_cex=_integer(item, "total_inflows_cex", context, False),

@@ -34,13 +34,14 @@ CREATE TABLE nansen.flows (
     holders_count BIGINT NOT NULL,
     total_inflows_count BIGINT NOT NULL,
     total_outflows_count BIGINT NOT NULL,
+    flow_label TEXT NOT NULL DEFAULT '',
     bucket_end TIMESTAMPTZ,
     is_complete BOOLEAN,
     total_inflows_cex BIGINT,
     total_inflows_dex BIGINT,
     total_outflows_cex BIGINT,
     total_outflows_dex BIGINT,
-    UNIQUE (chain, token_address, date, flow_key)
+    UNIQUE (chain, token_address, flow_label, date, flow_key)
 );
 
 CREATE TABLE nansen.dex_trades (
@@ -70,6 +71,9 @@ CREATE TABLE nansen.ingestion_runs (
     status TEXT NOT NULL CHECK (status IN ('running', 'success', 'failed', 'partial')),
     chain TEXT NOT NULL,
     endpoint TEXT NOT NULL,
+    token_address TEXT NOT NULL,
+    flow_label TEXT NOT NULL DEFAULT '',
+    request_scope JSONB NOT NULL DEFAULT '{}'::jsonb,
     window_start TIMESTAMPTZ,
     window_end TIMESTAMPTZ,
     pages_requested INTEGER NOT NULL DEFAULT 0,
@@ -86,11 +90,12 @@ CREATE TABLE nansen.checkpoints (
     chain TEXT NOT NULL,
     endpoint TEXT NOT NULL,
     token_address TEXT NOT NULL,
+    flow_label TEXT NOT NULL DEFAULT '',
     last_complete_timestamp TIMESTAMPTZ NOT NULL,
     last_success_run_id UUID NOT NULL REFERENCES nansen.ingestion_runs(run_id),
     updated_at TIMESTAMPTZ NOT NULL,
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    PRIMARY KEY (chain, endpoint, token_address)
+    PRIMARY KEY (chain, endpoint, token_address, flow_label)
 );
 
 CREATE INDEX nansen_flows_lookup ON nansen.flows (chain, token_address, date);

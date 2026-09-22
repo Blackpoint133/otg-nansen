@@ -29,3 +29,9 @@ Task 007 defines, but does not apply, an isolated `nansen` PostgreSQL schema
 with snapshot, flow, trade, ingestion-run, and checkpoint tables. A future
 driver-backed repository must use parameter binding and preserve the raw-to-
 normalized boundary.
+
+Persistence identity is scope-aware: flow labels are part of request and
+checkpoint provenance, while flow keys exclude mutable measurements. DEX trade
+keys exclude mutable labels and USD estimates while retaining transaction and
+swap identity. Repository lifecycle methods are designed around one
+transaction per ingestion run.

@@ -40,3 +40,14 @@ All Decimal model values map to PostgreSQL `NUMERIC`, not floating-point
 types. All accepted datetimes map to `TIMESTAMPTZ`. Complete-window reruns are
 idempotent through deterministic flow/trade keys. Partial or failed runs
 cannot advance a checkpoint. No schema or row exists from this task.
+
+Task 008 adds `flow_label` and request-scope provenance to flow/run records.
+Checkpoint identity is `(chain, endpoint, token_address, flow_label)` so
+separate flow-label streams cannot overwrite one another. Flow keys use only
+stable scope/time identity fields and DEX trade keys use transaction/trader/
+swap identity; mutable labels, names, and USD estimates are excluded.
+
+The repository lifecycle is intended to run in one database transaction:
+begin a run, upsert normalized rows, mark the run success or failure, and
+advance a checkpoint only after complete success. Rollback preserves the prior
+checkpoint and prevents partial data from being marked complete.
