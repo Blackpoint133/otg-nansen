@@ -68,8 +68,8 @@ a run that becomes success in the same commit. Migration status is NOT
 APPLIED.
 Task 011 provides the selected psycopg3 adapter and a guarded migration
 command. The command forces `server_otg_staging`, verifies `current_database`,
-and uses bounded lock and statement timeouts. The migration remains NOT
-APPLIED pending staging CREATE permission.
+and uses bounded lock and statement timeouts. Task 013A applied the schema to
+`server_otg_staging` only; production remains NOT APPLIED.
 Checkpoint advancement now validates the actual successful ingestion run,
 canonical token, endpoint, chain, and flow scope. The checkpoint SQL uses an
 `INSERT ... SELECT` eligibility guard, and the schema composite foreign key

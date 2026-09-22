@@ -25,22 +25,25 @@ tested secondary source. Persistence and parser business logic remain later
 phases. The client contracts are represented by sanitized fixtures and strict
 shape tests; the raw-to-normalized boundary now produces immutable models with
 UTC timestamps and Decimal numeric values. Persistence remains unimplemented.
-Task 007 adds a proposed, review-only PostgreSQL design and parameter mapping;
-the migration has not been applied.
+Task 007 added a proposed, review-only PostgreSQL design and parameter mapping;
+the migration was not applied at that stage.
 Task 008 hardens persistence semantics with request-scope provenance,
 canonical stable keys, and separate checkpoint streams for flow labels.
 Task 009 finalizes the proposed persistence boundary: flows require an
 explicit non-empty scope, equivalent Decimal key values canonicalize alike,
 flow keys exclude unproven bucket observations, and parameterized upserts
 protect complete records from incomplete downgrades. Audit lifecycle state is
-durable separately from the data/checkpoint transaction. Migration status is
-NOT APPLIED.
+durable separately from the data/checkpoint transaction. Migration status was
+NOT APPLIED at that stage.
 Task 010 closes the remaining pre-DDL consistency gaps: Avalanche EVM
 addresses are lowercase at the persistence boundary, Solana addresses remain
 case-sensitive, flow scopes are trimmed and required, and successful data,
-checkpoint, and audit status commit atomically. Migration status remains NOT
-APPLIED.
+checkpoint, and audit status commit atomically. Migration status was NOT
+APPLIED before staging authorization.
 Task 011 adds a psycopg3 repository adapter and a staging-only migration
-command. The migration is guarded to `server_otg_staging` and remains pending
-until the database role has the required CREATE privilege. Production is not
-connected or modified.
+command. The migration is guarded to `server_otg_staging` and is now applied
+there. Production is not connected for writes or modified.
+
+Task 013A applied the reviewed `nansen` schema to `server_otg_staging` only.
+Integration tests remain intentionally pending until the operator revokes the
+temporary CREATE privilege.

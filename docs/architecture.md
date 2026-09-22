@@ -44,4 +44,5 @@ preserving exact Solana and unknown-chain values. Flow scope is trimmed once
 at normalization and reused by all persistence mappings.
 Task 011 adds a psycopg3 repository adapter with separate durable-audit and
 atomic data/checkpoint/success connections. The staging migration command is
-database-pinned and has not been applied while permissions are pending.
+database-pinned and was applied to `server_otg_staging` only in Task 013A.
+Production remains unapplied.
