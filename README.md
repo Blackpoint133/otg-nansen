@@ -18,6 +18,8 @@ and provide values through your local secret-management workflow. Never commit
 
 ## Status
 
-Phase 0A bootstrap and Phase 0B reconnaissance are complete. The evidence
-supports a primary Avalanche MVP source with Solana retained as a tested
-secondary source. Parser implementation remains a later phase.
+Phase 0A bootstrap and Phase 0B reconnaissance are complete. A bounded Nansen
+client foundation and fixture-first contract tests are now implemented. The
+evidence supports a primary Avalanche MVP source with Solana retained as a
+tested secondary source. Persistence and parser business logic remain later
+phases.

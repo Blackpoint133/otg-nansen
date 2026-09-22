@@ -16,3 +16,6 @@ trade, holder, transfer, and buyer/seller responses, while the narrow Solana
 Smart Money flows window was empty. The native GUNZ chain remains a separate
 identity question because the reviewed Nansen chain list did not include
 `gunz`.
+
+The first code foundation is a bounded HTTP client with no persistence or
+service runtime.

@@ -267,7 +267,7 @@ and confirming the account's API plan/credit budget. It should not yet create
 production tables, backfill history, or deploy a service.
 
 FINAL_STATUS=PHASE_0B_RECONNAISSANCE_COMPLETE
-CYRILLIC_SCAN=REQUIRED_BEFORE_COMMIT
-SECRET_SCAN=REQUIRED_BEFORE_COMMIT
+CYRILLIC_SCAN=PASS
+SECRET_SCAN=PASS
 DATABASE_WRITES=0
 PRODUCTION_CHANGED=NO

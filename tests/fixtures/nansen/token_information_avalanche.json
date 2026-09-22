@@ -1,0 +1,10 @@
+{
+  "data": [{
+    "chain": "avalanche",
+    "token_address": "0xTOKEN_PLACEHOLDER",
+    "token_symbol": "GUN",
+    "price_usd": 0.01,
+    "market_cap_usd": 1000000
+  }],
+  "pagination": {"page": 1, "per_page": 2, "is_last_page": true}
+}

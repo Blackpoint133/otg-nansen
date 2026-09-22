@@ -1,0 +1,11 @@
+{
+  "data": [{
+    "chain": "avalanche",
+    "token_address": "0xTOKEN_PLACEHOLDER",
+    "block_timestamp": "2026-09-20T12:00:00Z",
+    "side": "Buy",
+    "token_amount": 10.0,
+    "trade_value_usd": 100.0
+  }],
+  "pagination": {"page": 1, "per_page": 2, "is_last_page": true}
+}

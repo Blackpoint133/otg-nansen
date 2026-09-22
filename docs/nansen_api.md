@@ -4,7 +4,10 @@
 
 Official documentation reviewed on 2026-09-21 states that API requests use
 POST with JSON bodies and an `apikey` header. Current documented limits are 20
-requests per second and 300 requests per minute per key. Common errors include
+the current reference lists 15 requests per second and 300 requests per minute
+for Free, and 75 requests per second and 1,500 requests per minute for Pro.
+These are not embedded as universal client limits because the account plan is
+unverified. Common errors include
 400, 401, 402, 403, 404, 422, 429, 500, and 504.
 
 The documented response pagination shape uses `page`, `per_page`, and an
@@ -14,9 +17,9 @@ and delayed availability for the current day. This does not establish the
 historical depth of every endpoint.
 
 Documented Pro credit costs are generally 1 for TGM token-information, flows,
-who-bought-sold, DEX trades, and transfers; TGM holders is 5. Free-plan costs
-are documented as 10x those costs. Account plan and remaining balance were not
-queried.
+who-bought-sold, DEX trades, and transfers; TGM holders is 5. The current
+endpoint overview is the source of per-endpoint credit values; account plan and
+remaining balance were not queried.
 
 Official references:
 
@@ -51,6 +54,17 @@ credential was saved. A sanitized shape fixture is at
 The live probe verified that the API key authenticates and that Nansen accepts
 both configured token identities for token-information. It also verified
 usable trade, holder, transfer, and buyer/seller responses on both chains.
+
+## Client foundation
+
+The client uses the documented base URL, configurable timeout, finite retries,
+a hard per-run request budget, and finite pagination. Default unit tests use
+mocks and fixtures only. Live tests are explicitly opt-in with
+`NANSEN_RUN_LIVE_TESTS=1`.
+
+Task 004 implements only `token_information`, `flows`, and `dex_trades`.
+Persistence, backfill, and business-specific event analysis are not
+implemented.
 
 ## Not verified
 
