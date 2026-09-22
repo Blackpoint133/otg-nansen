@@ -67,9 +67,10 @@ INGESTION_RUN_INSERT_SQL = """INSERT INTO nansen.ingestion_runs (
 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"""
 
 INGESTION_RUN_SUCCESS_SQL = """UPDATE nansen.ingestion_runs
-SET status = 'success', finished_at = %s, records_received = %s,
-    records_normalized = %s, records_inserted = %s,
-    records_updated_or_conflicted = %s, error_type = NULL, error_summary = NULL
+SET status = 'success', finished_at = %s, pages_requested = %s,
+    api_calls = %s, records_received = %s, records_normalized = %s,
+    records_inserted = %s, records_updated_or_conflicted = %s,
+    error_type = NULL, error_summary = NULL
 WHERE run_id = %s;"""
 
 INGESTION_RUN_FAILURE_SQL = """UPDATE nansen.ingestion_runs

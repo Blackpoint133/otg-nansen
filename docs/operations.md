@@ -41,3 +41,9 @@ success status, and the checkpoint. Empty complete windows advance to the
 requested end; incomplete, malformed, or out-of-window source data records a
 bounded failure. All Task 014 tests used fixtures or fakes, with zero live
 Nansen calls.
+
+Task 014R uses the documented array sorting form for historical requests and
+does not send a standalone `order` field. Successful runs persist logical page
+and API-attempt counters. If bounded pagination reaches its limit, the failure
+audit retains the known fetched page and record counts while data and
+checkpoints remain unchanged.

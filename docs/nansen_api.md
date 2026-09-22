@@ -85,6 +85,15 @@ ascending ordering fields, finite pagination, and per-run API-attempt counts.
 This orchestration behavior is fixture-verified only; real `$GUN` request
 behavior remains unverified in Task 014.
 
+Task 014R rechecked the current official endpoint documentation. The official
+historical request form is an `order_by` array, represented in the client as:
+
+- flows: `[{'field': 'date', 'direction': 'ASC'}]`;
+- DEX trades: `[{'field': 'block_timestamp', 'direction': 'ASC'}]`.
+
+These request shapes are OFFICIAL-DOC VERIFIED and FIXTURE VERIFIED, but not
+LIVE VERIFIED by Task 014R. No standalone `order` field is sent.
+
 ## Not verified
 
 The account plan, exact credit balance, endpoint-specific maximum historical

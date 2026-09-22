@@ -57,6 +57,15 @@ def test_model_mappings_preserve_decimal_and_utc_datetime():
     assert "apikey" not in trade_payload and "password" not in trade_payload
 
 
+def test_success_sql_persists_all_audit_counters():
+    assert "pages_requested = %s" in INGESTION_RUN_SUCCESS_SQL
+    assert "api_calls = %s" in INGESTION_RUN_SUCCESS_SQL
+    assert "records_received = %s" in INGESTION_RUN_SUCCESS_SQL
+    assert "records_normalized = %s" in INGESTION_RUN_SUCCESS_SQL
+    assert "records_inserted = %s" in INGESTION_RUN_SUCCESS_SQL
+    assert "records_updated_or_conflicted = %s" in INGESTION_RUN_SUCCESS_SQL
+
+
 def test_mapping_keys_are_deterministic_and_idempotency_keys_stable():
     flow = normalize_flows(load("flows_avalanche.json"), chain="avalanche", token_address=TOKEN, flow_label="smart_money")[0]
     trade = normalize_dex_trades(load("dex_trades_avalanche.json"), chain="avalanche", token_address=TOKEN)[0]

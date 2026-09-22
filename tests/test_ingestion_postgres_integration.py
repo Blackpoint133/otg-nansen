@@ -47,6 +47,11 @@ def test_task014_fixture_flow_orchestration_is_idempotent():
             "SELECT count(*) FROM nansen.ingestion_runs WHERE run_id IN (%s, %s) AND status = 'success'", run_ids
         ).fetchone()[0]
         assert runs == 2
+        counters = repo.audit_connection.execute(
+            "SELECT pages_requested, api_calls, records_received, records_normalized "
+            "FROM nansen.ingestion_runs WHERE run_id = %s", (run_ids[0],)
+        ).fetchone()
+        assert tuple(counters) == (1, 1, 1, 1)
         checkpoint = repo.read_checkpoint("avalanche", "flows", token, label)
         assert checkpoint["last_complete_timestamp"] == window.end
         assert checkpoint["last_success_run_id"] in {UUID(run_ids[0]), UUID(run_ids[1])}

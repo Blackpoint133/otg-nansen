@@ -47,3 +47,9 @@ Task 011 adds a psycopg3 repository adapter with separate durable-audit and
 atomic data/checkpoint/success connections. The staging migration command is
 database-pinned and was applied to `server_otg_staging` only in Task 013A.
 Production remains unapplied.
+
+Task 014R aligns historical request sorting with the official Nansen contract:
+flows use `order_by=[{'field': 'date', 'direction': 'ASC'}]` and DEX trades use
+`order_by=[{'field': 'block_timestamp', 'direction': 'ASC'}]`. Success audit
+updates persist page and API-attempt counters, and pagination-limit failures
+retain known page/record progress. These repairs are fixture-verified only.

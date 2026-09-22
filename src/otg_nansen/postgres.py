@@ -174,7 +174,8 @@ class PostgresRepository:
             raise PersistenceDesignError("unexpected checkpoint upsert result")
 
     def complete_ingestion_run(self, run_id: str, counts: dict[str, int]) -> None:
-        values = (datetime.now().astimezone(), counts.get("records_received", 0), counts.get("records_normalized", 0),
+        values = (datetime.now().astimezone(), counts.get("pages_requested", 0), counts.get("api_calls", 0),
+                  counts.get("records_received", 0), counts.get("records_normalized", 0),
                   counts.get("records_inserted", 0), counts.get("records_updated_or_conflicted", 0), run_id)
         self._data_cursor().execute(INGESTION_RUN_SUCCESS_SQL, values)
 

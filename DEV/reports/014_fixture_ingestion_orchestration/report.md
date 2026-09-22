@@ -202,3 +202,12 @@ before real `$GUN` ingestion. No scheduler or production path exists.
 Review the orchestration contract, then authorize a narrowly bounded real
 Avalanche `$GUN` ingestion window with explicit live-call and staging-data
 limits.
+
+## TASK 014R ADDENDUM
+
+External review found three pre-live issues: historical sorting used an
+undocumented string `order_by` plus standalone `order`; successful PostgreSQL
+audit updates did not persist `pages_requested` or `api_calls`; and
+`PaginationLimitReached` could lose its known page and record progress in the
+failure audit. Task 014R corrected these issues before any real Nansen
+ingestion.

@@ -9,7 +9,7 @@ from typing import Any, Callable, Optional, Protocol
 from uuid import uuid4
 
 from .client import PaginationResult
-from .errors import IncompleteSourceWindow, IngestionWindowError
+from .errors import IncompleteSourceWindow, IngestionWindowError, PaginationLimitReached
 from .models import NormalizedDexTrade, NormalizedFlowRecord, NormalizedTokenInformation
 from .normalize import normalize_dex_trades, normalize_flows, normalize_token_information
 from .persistence import NansenRepository, canonical_request_scope, map_ingestion_run
@@ -133,7 +133,7 @@ class NansenIngestionOrchestrator:
         try:
             payload: dict[str, Any] = {
                 "chain": chain, "token_address": token_address, "date": window.to_payload(),
-                "order_by": "date" if endpoint == "flows" else "block_timestamp", "order": "asc",
+                "order_by": [{"field": "date" if endpoint == "flows" else "block_timestamp", "direction": "ASC"}],
             }
             api_endpoint = "/api/v1/tgm/flows" if endpoint == "flows" else "/api/v1/tgm/dex-trades"
             if endpoint == "flows":
@@ -164,6 +164,10 @@ class NansenIngestionOrchestrator:
             return IngestionResult(run_id, endpoint, pages, calls, received, normalized)
         except BaseException as error:
             self.repository.rollback_data_transaction()
+            if isinstance(error, PaginationLimitReached):
+                pages = error.pages_fetched
+                received = error.records_collected
+                normalized = 0
             self._fail(run_id, error, pages, self.source.requests_attempted - calls_before, received, normalized)
             raise
 

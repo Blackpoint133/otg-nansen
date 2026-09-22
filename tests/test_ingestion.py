@@ -84,7 +84,8 @@ def test_flow_success_audits_and_checkpoints_at_window_end():
     checkpoint = repository.read_checkpoint("avalanche", "flows", TOKEN, "smart_money")
     assert checkpoint["last_complete_timestamp"] == WINDOW.end
     assert source.requests[0][1]["date"] == WINDOW.to_payload()
-    assert source.requests[0][1]["order"] == "asc"
+    assert source.requests[0][1]["order_by"] == [{"field": "date", "direction": "ASC"}]
+    assert "order" not in source.requests[0][1]
 
 
 def test_flow_multi_page_and_retry_attempt_accounting():
@@ -95,6 +96,15 @@ def test_flow_multi_page_and_retry_attempt_accounting():
     result = orchestrator_instance.ingest_flows(chain="avalanche", token_address=TOKEN, window=WINDOW, flow_label="smart_money")
     assert result.pages_requested == 2 and result.api_calls == 2
     assert repository.ingestion_runs[result.run_id]["api_calls"] == 2
+
+
+def test_dex_request_uses_documented_order_by_array():
+    source = FakeSource(pages=[trade_records()])
+    orchestrator_instance, _ = orchestrator(source)
+    orchestrator_instance.ingest_dex_trades(chain="avalanche", token_address=TOKEN, window=WINDOW)
+    payload = source.requests[0][1]
+    assert payload["order_by"] == [{"field": "block_timestamp", "direction": "ASC"}]
+    assert "order" not in payload
 
 
 def test_empty_complete_windows_succeed_for_flows_and_trades():
@@ -148,13 +158,18 @@ def test_token_snapshot_audits_without_checkpoint():
 
 
 def test_pagination_and_budget_failures_are_audited():
-    for error in (PaginationLimitReached("flows", 1, 1), RequestBudgetExceeded("budget")):
+    for error in (PaginationLimitReached("flows", 2, 3), RequestBudgetExceeded("budget")):
         source = FakeSource(pages=[error])
         orchestrator_instance, repository = orchestrator(source)
         with pytest.raises(type(error)):
             orchestrator_instance.ingest_flows(chain="avalanche", token_address=TOKEN, window=WINDOW, flow_label="smart_money")
         assert next(iter(repository.ingestion_runs.values()))["status"] == "failed"
         assert repository.data["flows"] == {}
+        run = next(iter(repository.ingestion_runs.values()))
+        if isinstance(error, PaginationLimitReached):
+            assert run["pages_requested"] == 2 and run["records_received"] == 3
+        else:
+            assert run["pages_requested"] == 0 and run["records_received"] == 0
 
 
 def test_rerunning_same_window_is_idempotent_and_audited_twice():
