@@ -1,6 +1,8 @@
 """Tests for chain-aware token identity semantics."""
 
-from otg_nansen.identity import token_identity_matches
+import pytest
+
+from otg_nansen.identity import canonical_chain_address, token_identity_matches
 from otg_nansen.normalize import normalize_token_information
 from otg_nansen.errors import NormalizationError
 
@@ -28,6 +30,19 @@ def test_solana_identity_is_exact_and_case_sensitive():
 def test_unknown_chain_uses_exact_comparison():
     assert token_identity_matches("unknown-chain", "TokenABC", "TokenABC")
     assert not token_identity_matches("unknown-chain", "TokenABC", "tokenabc")
+
+
+def test_avalanche_persistence_address_is_lowercase_and_validated():
+    address = "0x00000000000000000000000000000000000000Aa"
+    assert canonical_chain_address("avalanche", address) == address.lower()
+    with pytest.raises(ValueError):
+        canonical_chain_address("avalanche", "0xNOT_AN_EVM_ADDRESS")
+
+
+def test_solana_and_unknown_persistence_addresses_preserve_case():
+    address = "3jUf2RTyXp867piSB2dt8uUcNiLDW58asjGtXkRAkBbe"
+    assert canonical_chain_address("solana", address) == address
+    assert canonical_chain_address("other", "TokenABC") == "TokenABC"
 
 
 def test_solana_normalizer_rejects_case_only_identity_mismatch():

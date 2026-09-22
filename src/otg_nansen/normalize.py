@@ -6,7 +6,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
 
 from .errors import NormalizationError
-from .identity import token_identity_matches
+from .identity import canonical_flow_scope, token_identity_matches
 from .models import NormalizedDexTrade, NormalizedFlowRecord, NormalizedTokenInformation
 
 
@@ -120,7 +120,9 @@ def normalize_flows(
     flow_label: str,
 ) -> list[NormalizedFlowRecord]:
     context = "flows"
-    if not isinstance(flow_label, str) or not flow_label.strip():
+    try:
+        flow_label = canonical_flow_scope(flow_label)
+    except ValueError as exc:
         raise NormalizationError(f"{context}.flow_label: expected non-empty string")
     root = _mapping(response, context)
     data = root.get("data")

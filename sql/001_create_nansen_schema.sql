@@ -34,14 +34,14 @@ CREATE TABLE nansen.flows (
     holders_count BIGINT NOT NULL,
     total_inflows_count BIGINT NOT NULL,
     total_outflows_count BIGINT NOT NULL,
-    flow_label TEXT NOT NULL DEFAULT '',
+    flow_label TEXT NOT NULL,
     bucket_end TIMESTAMPTZ,
     is_complete BOOLEAN,
     total_inflows_cex BIGINT,
     total_inflows_dex BIGINT,
     total_outflows_cex BIGINT,
     total_outflows_dex BIGINT,
-    CHECK (flow_label <> '')
+    CHECK (flow_label = btrim(flow_label) AND btrim(flow_label) <> '')
 );
 
 CREATE TABLE nansen.dex_trades (
@@ -71,7 +71,7 @@ CREATE TABLE nansen.ingestion_runs (
     chain TEXT NOT NULL,
     endpoint TEXT NOT NULL,
     token_address TEXT NOT NULL,
-    flow_label TEXT NOT NULL DEFAULT '',
+    flow_label TEXT NOT NULL,
     request_scope JSONB NOT NULL DEFAULT '{}'::jsonb,
     window_start TIMESTAMPTZ,
     window_end TIMESTAMPTZ,
@@ -82,19 +82,33 @@ CREATE TABLE nansen.ingestion_runs (
     records_inserted INTEGER NOT NULL DEFAULT 0,
     records_updated_or_conflicted INTEGER NOT NULL DEFAULT 0,
     error_type TEXT,
-    error_summary TEXT
+    error_summary TEXT,
+    CHECK (
+        (endpoint = 'flows' AND flow_label = btrim(flow_label) AND btrim(flow_label) <> '')
+        OR (endpoint <> 'flows' AND flow_label = '')
+    ),
+    CHECK (
+        request_scope->>'chain' = chain
+        AND request_scope->>'endpoint' = endpoint
+        AND request_scope->>'token_address' = token_address
+        AND request_scope->>'flow_label' = flow_label
+    )
 );
 
 CREATE TABLE nansen.checkpoints (
     chain TEXT NOT NULL,
     endpoint TEXT NOT NULL,
     token_address TEXT NOT NULL,
-    flow_label TEXT NOT NULL DEFAULT '',
+    flow_label TEXT NOT NULL,
     last_complete_timestamp TIMESTAMPTZ NOT NULL,
     last_success_run_id UUID NOT NULL REFERENCES nansen.ingestion_runs(run_id),
     updated_at TIMESTAMPTZ NOT NULL,
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    PRIMARY KEY (chain, endpoint, token_address, flow_label)
+    PRIMARY KEY (chain, endpoint, token_address, flow_label),
+    CHECK (
+        (endpoint = 'flows' AND flow_label = btrim(flow_label) AND btrim(flow_label) <> '')
+        OR (endpoint <> 'flows' AND flow_label = '')
+    )
 );
 
 CREATE INDEX nansen_flows_lookup ON nansen.flows (chain, token_address, date);

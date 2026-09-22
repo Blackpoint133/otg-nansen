@@ -47,7 +47,9 @@ token_address, flow_label)` so separate flow-label streams cannot overwrite
 one another. Flow keys use only stable chain/token/scope/date identity; the
 unproven `bucket_end` and all mutable observations are excluded. DEX trade
 keys use stable swap dimensions with canonical Decimal encoding and exclude
-mutable enrichment.
+mutable enrichment. Normalized models preserve caller identity for application
+use, while persistence mappings canonicalize Avalanche EVM addresses to
+lowercase; Solana and unknown-chain address values remain exact.
 Checkpoint identity is `(chain, endpoint, token_address, flow_label)` so
 separate flow-label streams cannot overwrite one another. Flow keys use only
 stable scope/time identity fields and DEX trade keys use transaction/trader/
@@ -58,6 +60,9 @@ snapshots are ignored. Parameterized flow and trade upserts are reviewable in
 the persistence module. A complete flow cannot be downgraded by a later
 incomplete observation. The audit lifecycle is separate: a committed running
 row is created first; data and checkpoint changes commit atomically; then the
-run is marked success, or the data transaction rolls back and the existing
-run is marked failed/partial in a separate audit operation. Migration status
-is NOT APPLIED.
+run is marked success inside that same transaction, or the data transaction
+rolls back and the existing run is marked failed/partial in a separate audit
+operation. SQL checks require canonical non-empty flow scope and enforce the
+empty non-flow scope representation. A successful checkpoint always references
+a run that becomes success in the same commit. Migration status is NOT
+APPLIED.

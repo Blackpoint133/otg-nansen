@@ -39,3 +39,6 @@ The final proposed lifecycle instead uses a durable audit start, one atomic
 data/checkpoint transaction, and a durable audit success or failure update.
 Migration status is NOT APPLIED. Flow scope is mandatory and flow identity is
 chain, token, scope, and date; DEX trade identity excludes mutable enrichment.
+Persistence identity canonicalizes Avalanche EVM addresses to lowercase while
+preserving exact Solana and unknown-chain values. Flow scope is trimmed once
+at normalization and reused by all persistence mappings.

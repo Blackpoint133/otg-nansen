@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from decimal import Decimal
+from dataclasses import replace
 from pathlib import Path
 import json
 
@@ -21,6 +22,8 @@ from otg_nansen.persistence import (
     InMemoryTransactionRepository,
     NansenRepository,
     PersistenceDesignError,
+    canonical_request_scope,
+    checkpoint_stream_key,
     _canonical_value,
     merge_flow_completeness,
     map_ingestion_run,
@@ -76,6 +79,29 @@ def test_flow_scope_is_preserved_and_mutable_metrics_do_not_change_key():
     assert map_flow(first)["flow_key"] != map_flow(other_scope)["flow_key"]
 
 
+def test_avalanche_case_variants_share_persistence_identity():
+    response = load("flows_avalanche.json")
+    mixed = "0x00000000000000000000000000000000000000Aa"
+    upper = normalize_flows(response, chain="avalanche", token_address=mixed, flow_label=" smart_money ")[0]
+    lower = normalize_flows(response, chain="avalanche", token_address=mixed.lower(), flow_label="smart_money")[0]
+    assert map_flow(upper)["token_address"] == mixed.lower()
+    assert map_flow(upper)["flow_key"] == map_flow(lower)["flow_key"]
+    assert checkpoint_stream_key("avalanche", "flows", mixed, " smart_money ") == checkpoint_stream_key("avalanche", "flows", mixed.lower(), "smart_money")
+    assert canonical_request_scope("flows", " smart_money ") == "smart_money"
+
+
+def test_token_snapshot_mapping_canonicalizes_avalanche_address():
+    response = load("token_information_avalanche.json")
+    response["data"]["contract_address"] = "0x00000000000000000000000000000000000000aa"
+    model = normalize_token_information(response, chain="avalanche", token_address="0x00000000000000000000000000000000000000Aa")
+    payload = map_token_information(model, datetime(2026, 9, 22, tzinfo=timezone.utc))
+    assert payload["token_address"] == "0x00000000000000000000000000000000000000aa"
+
+
+def test_solana_case_variants_remain_distinct_persistence_identity():
+    assert checkpoint_stream_key("solana", "flows", "SolToken", "smart_money") != checkpoint_stream_key("solana", "flows", "soltoken", "smart_money")
+
+
 def test_flow_key_excludes_bucket_and_observation_values():
     response = load("flows_avalanche.json")
     first = normalize_flows(response, chain="avalanche", token_address=TOKEN, flow_label="smart_money")[0]
@@ -118,6 +144,26 @@ def test_trade_key_excludes_mutable_enrichment_and_estimates():
     assert map_dex_trade(first)["trade_key"] == map_dex_trade(second)["trade_key"]
 
 
+def test_trade_evm_address_case_variants_share_key():
+    first = normalize_dex_trades(load("dex_trades_avalanche.json"), chain="avalanche", token_address=TOKEN)[0]
+    mixed = replace(
+        first,
+        requested_token_address="0x00000000000000000000000000000000000000Aa",
+        token_address="0x00000000000000000000000000000000000000Bb",
+        trader_address="0x00000000000000000000000000000000000000Cc",
+        traded_token_address="0x00000000000000000000000000000000000000Dd",
+    )
+    lower = replace(
+        mixed,
+        requested_token_address=mixed.requested_token_address.lower(),
+        token_address=mixed.token_address.lower(),
+        trader_address=mixed.trader_address.lower(),
+        traded_token_address=mixed.traded_token_address.lower(),
+    )
+    second = lower
+    assert map_dex_trade(mixed)["trade_key"] == map_dex_trade(second)["trade_key"]
+
+
 def test_ingestion_provenance_contains_token_and_scope():
     started = datetime(2026, 9, 22, tzinfo=timezone.utc)
     run = map_ingestion_run(
@@ -157,6 +203,10 @@ def test_migration_is_reviewable_but_not_executed():
     assert "request_scope JSONB" in text
     assert "UNIQUE (chain, token_address, flow_label, date, flow_key)" not in text
     assert "UNIQUE (chain, transaction_hash, trader_address, action, token_address, traded_token_address, trade_key)" not in text
+    assert "flow_label TEXT NOT NULL DEFAULT ''" not in text
+    assert "flow_label = btrim(flow_label)" in text
+    assert "endpoint = 'flows'" in text
+    assert "request_scope->>'token_address' = token_address" in text
 
 
 def test_parameterized_sql_contains_required_semantics():
@@ -183,8 +233,9 @@ def test_in_memory_transaction_success_and_failure_lifecycle():
     success.begin_data_transaction()
     success.store_flows([flow])
     success.advance_checkpoint("avalanche", "flows", TOKEN, timestamp, "run-success", "success", True, "smart_money")
-    success.commit_data_transaction()
     success.complete_ingestion_run("run-success", {"records_inserted": 1})
+    assert success.ingestion_runs["run-success"]["status"] == "running"
+    success.commit_data_transaction()
     assert success.data["flows"]
     assert success.read_checkpoint("avalanche", "flows", TOKEN, "smart_money")
     assert success.ingestion_runs["run-success"]["status"] == "success"
@@ -196,7 +247,9 @@ def test_in_memory_transaction_success_and_failure_lifecycle():
     failed.begin_data_transaction()
     failed.store_flows([flow])
     failed.advance_checkpoint("avalanche", "flows", TOKEN, timestamp, "run-failed", "success", True, "smart_money")
+    failed.complete_ingestion_run("run-failed", {"records_inserted": 1})
     failed.rollback_data_transaction()
+    assert failed.ingestion_runs["run-failed"]["status"] == "running"
     failed.fail_ingestion_run("run-failed", "NormalizationError", "safe summary")
     assert failed.data["flows"] == {}
     assert failed.read_checkpoint("avalanche", "flows", TOKEN, "smart_money") is None

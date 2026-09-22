@@ -146,3 +146,17 @@ responses before production ingestion.
 
 Task 010 may implement a driver-specific review-only SQL adapter against an
 isolated temporary database. Existing OTG databases must remain untouched.
+
+## TASK 010 ADDENDUM
+
+External review found that EVM persistence identity was not canonicalized,
+flow scope whitespace could create distinct streams, SQL did not fully enforce
+flow scope, and updating audit success after data commit left a crash-
+consistency window.
+
+Task 010 corrected these issues before migration execution. Avalanche EVM
+addresses now use lowercase persistence identity, Solana remains exact,
+canonical trimmed flow scope is shared across normalization and persistence,
+SQL adds endpoint-aware scope checks, and success status is staged with data
+and checkpoint in the atomic transaction. Failure audit updates remain
+durable after rollback.

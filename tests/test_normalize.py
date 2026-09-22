@@ -82,6 +82,11 @@ def test_flows_require_explicit_non_empty_scope(label):
         normalize_flows(load("flows_avalanche.json"), chain="avalanche", token_address=TOKEN_ADDRESS, flow_label=label)
 
 
+def test_flow_scope_is_trimmed_without_case_normalization():
+    model = normalize_flows(load("flows_avalanche.json"), chain="avalanche", token_address=TOKEN_ADDRESS, flow_label=" smart_money ")[0]
+    assert model.flow_label == "smart_money"
+
+
 @pytest.mark.parametrize("field,value", [("price_usd", "bad"), ("token_amount", "NaN"), ("value_usd", "Infinity")])
 def test_flows_reject_invalid_numeric_values(field, value):
     response = load("flows_avalanche.json")

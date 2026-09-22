@@ -35,3 +35,8 @@ flow keys exclude unproven bucket observations, and parameterized upserts
 protect complete records from incomplete downgrades. Audit lifecycle state is
 durable separately from the data/checkpoint transaction. Migration status is
 NOT APPLIED.
+Task 010 closes the remaining pre-DDL consistency gaps: Avalanche EVM
+addresses are lowercase at the persistence boundary, Solana addresses remain
+case-sensitive, flow scopes are trimmed and required, and successful data,
+checkpoint, and audit status commit atomically. Migration status remains NOT
+APPLIED.

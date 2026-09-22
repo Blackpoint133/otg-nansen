@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any, Optional, Protocol
 
 from .errors import NansenError
+from .identity import canonical_chain_address, canonical_flow_scope
 from .models import NormalizedDexTrade, NormalizedFlowRecord, NormalizedTokenInformation
 
 
@@ -130,21 +131,29 @@ def _fingerprint(values: dict[str, Any]) -> str:
 
 def canonical_request_scope(endpoint: str, flow_label: Optional[str] = None) -> str:
     if endpoint == "flows":
-        if not isinstance(flow_label, str) or not flow_label.strip():
-            raise PersistenceDesignError("flows requires a non-empty flow_label scope")
-        return flow_label
+        try:
+            return canonical_flow_scope(flow_label)
+        except ValueError as exc:
+            raise PersistenceDesignError("flows requires a non-empty flow_label scope") from exc
     return ""
+
+
+def _canonical_address(chain: str, address: str) -> str:
+    try:
+        return canonical_chain_address(chain, address)
+    except ValueError as exc:
+        raise PersistenceDesignError(str(exc)) from exc
 
 
 def checkpoint_stream_key(chain: str, endpoint: str, token_address: str, flow_label: Optional[str] = None) -> tuple[str, str, str, str]:
     """Return a checkpoint identity that separates flow request scopes."""
-    return chain, endpoint, token_address, canonical_request_scope(endpoint, flow_label)
+    return chain, endpoint, _canonical_address(chain, token_address), canonical_request_scope(endpoint, flow_label)
 
 
 def map_token_information(model: NormalizedTokenInformation, retrieved_at: datetime) -> dict[str, Any]:
     return {
         "chain": model.chain,
-        "token_address": model.token_address,
+        "token_address": _canonical_address(model.chain, model.token_address),
         "retrieved_at": _utc(retrieved_at, "retrieved_at"),
         "name": model.name,
         "symbol": model.symbol,
@@ -167,7 +176,7 @@ def map_token_information(model: NormalizedTokenInformation, retrieved_at: datet
 def map_flow(model: NormalizedFlowRecord) -> dict[str, Any]:
     payload = {
         "chain": model.chain,
-        "token_address": model.token_address,
+        "token_address": _canonical_address(model.chain, model.token_address),
         "date": _utc(model.date, "date"),
         "price_usd": model.price_usd,
         "token_amount": model.token_amount,
@@ -181,12 +190,12 @@ def map_flow(model: NormalizedFlowRecord) -> dict[str, Any]:
         "total_inflows_dex": model.total_inflows_dex,
         "total_outflows_cex": model.total_outflows_cex,
         "total_outflows_dex": model.total_outflows_dex,
-        "flow_label": model.flow_label,
+        "flow_label": canonical_flow_scope(model.flow_label),
     }
     payload["flow_key"] = _fingerprint({
         "chain": model.chain,
-        "token_address": model.token_address,
-        "flow_label": model.flow_label,
+        "token_address": _canonical_address(model.chain, model.token_address),
+        "flow_label": canonical_flow_scope(model.flow_label),
         "date": model.date,
     })
     return payload
@@ -195,16 +204,16 @@ def map_flow(model: NormalizedFlowRecord) -> dict[str, Any]:
 def map_dex_trade(model: NormalizedDexTrade) -> dict[str, Any]:
     payload = {
         "chain": model.chain,
-        "requested_token_address": model.requested_token_address,
+        "requested_token_address": _canonical_address(model.chain, model.requested_token_address),
         "block_timestamp": _utc(model.block_timestamp, "block_timestamp"),
         "transaction_hash": model.transaction_hash,
-        "trader_address": model.trader_address,
+        "trader_address": _canonical_address(model.chain, model.trader_address),
         "trader_address_label": model.trader_address_label,
         "action": model.action,
-        "token_address": model.token_address,
+        "token_address": _canonical_address(model.chain, model.token_address),
         "token_name": model.token_name,
         "token_amount": model.token_amount,
-        "traded_token_address": model.traded_token_address,
+        "traded_token_address": _canonical_address(model.chain, model.traded_token_address),
         "traded_token_name": model.traded_token_name,
         "traded_token_amount": model.traded_token_amount,
         "estimated_swap_price_usd": model.estimated_swap_price_usd,
@@ -212,14 +221,14 @@ def map_dex_trade(model: NormalizedDexTrade) -> dict[str, Any]:
     }
     payload["trade_key"] = _fingerprint({
         "chain": model.chain,
-        "requested_token_address": model.requested_token_address,
+        "requested_token_address": _canonical_address(model.chain, model.requested_token_address),
         "block_timestamp": model.block_timestamp,
         "transaction_hash": model.transaction_hash,
-        "trader_address": model.trader_address,
+        "trader_address": _canonical_address(model.chain, model.trader_address),
         "action": model.action,
-        "token_address": model.token_address,
+        "token_address": _canonical_address(model.chain, model.token_address),
         "token_amount": model.token_amount,
-        "traded_token_address": model.traded_token_address,
+        "traded_token_address": _canonical_address(model.chain, model.traded_token_address),
         "traded_token_amount": model.traded_token_amount,
     })
     return payload
@@ -248,15 +257,16 @@ def map_ingestion_run(
     if status not in {"running", "success", "failed", "partial"}:
         raise PersistenceDesignError("invalid ingestion run status")
     scope = canonical_request_scope(endpoint, flow_label)
+    persisted_token_address = _canonical_address(chain, token_address)
     return {
         "run_id": run_id,
         "started_at": _utc(started_at, "started_at"),
         "status": status,
         "chain": chain,
         "endpoint": endpoint,
-        "token_address": token_address,
+        "token_address": persisted_token_address,
         "flow_label": scope,
-        "request_scope": {"chain": chain, "endpoint": endpoint, "token_address": token_address, "flow_label": scope},
+        "request_scope": {"chain": chain, "endpoint": endpoint, "token_address": persisted_token_address, "flow_label": scope},
         "window_start": _utc(window_start, "window_start") if window_start else None,
         "window_end": _utc(window_end, "window_end") if window_end else None,
         "pages_requested": pages_requested,
@@ -340,6 +350,7 @@ class InMemoryTransactionRepository:
     ingestion_runs: dict[str, dict[str, Any]]
     _staged_data: Optional[dict[str, dict[str, Any]]]
     _staged_checkpoints: Optional[dict[tuple[str, str, str, str], dict[str, Any]]]
+    _staged_ingestion_runs: Optional[dict[str, dict[str, Any]]]
 
     def __init__(self) -> None:
         self.data = {"flows": {}, "dex_trades": {}, "token_information": {}}
@@ -347,6 +358,7 @@ class InMemoryTransactionRepository:
         self.ingestion_runs = {}
         self._staged_data = None
         self._staged_checkpoints = None
+        self._staged_ingestion_runs = None
 
     def begin_ingestion_run(self, run: dict[str, Any]) -> None:
         if run["status"] != "running":
@@ -358,26 +370,27 @@ class InMemoryTransactionRepository:
             raise PersistenceDesignError("data transaction already active")
         self._staged_data = {name: dict(values) for name, values in self.data.items()}
         self._staged_checkpoints = dict(self.checkpoints)
+        self._staged_ingestion_runs = {run_id: dict(run) for run_id, run in self.ingestion_runs.items()}
 
-    def _require_transaction(self) -> tuple[dict[str, dict[str, Any]], dict[tuple[str, str, str, str], dict[str, Any]]]:
-        if self._staged_data is None or self._staged_checkpoints is None:
+    def _require_transaction(self) -> tuple[dict[str, dict[str, Any]], dict[tuple[str, str, str, str], dict[str, Any]], dict[str, dict[str, Any]]]:
+        if self._staged_data is None or self._staged_checkpoints is None or self._staged_ingestion_runs is None:
             raise PersistenceDesignError("data transaction is not active")
-        return self._staged_data, self._staged_checkpoints
+        return self._staged_data, self._staged_checkpoints, self._staged_ingestion_runs
 
     def store_flows(self, models: list[NormalizedFlowRecord]) -> None:
-        staged, _ = self._require_transaction()
+        staged, _, _ = self._require_transaction()
         for model in models:
             payload = map_flow(model)
             staged["flows"][payload["flow_key"]] = payload
 
     def store_dex_trades(self, models: list[NormalizedDexTrade]) -> None:
-        staged, _ = self._require_transaction()
+        staged, _, _ = self._require_transaction()
         for model in models:
             payload = map_dex_trade(model)
             staged["dex_trades"][payload["trade_key"]] = payload
 
     def store_token_information(self, model: NormalizedTokenInformation, retrieved_at: datetime) -> None:
-        staged, _ = self._require_transaction()
+        staged, _, _ = self._require_transaction()
         payload = map_token_information(model, retrieved_at)
         key = (payload["chain"], payload["token_address"], payload["retrieved_at"])
         staged["token_information"][key] = payload
@@ -387,7 +400,7 @@ class InMemoryTransactionRepository:
         last_complete_timestamp: datetime, run_id: str, status: str,
         complete: bool, flow_label: Optional[str] = None,
     ) -> None:
-        _, checkpoints = self._require_transaction()
+        _, checkpoints, _ = self._require_transaction()
         validate_checkpoint_advance(status, complete)
         checkpoints[checkpoint_stream_key(chain, endpoint, token_address, flow_label)] = {
             "last_complete_timestamp": _utc(last_complete_timestamp, "last_complete_timestamp"),
@@ -399,18 +412,22 @@ class InMemoryTransactionRepository:
         return self.checkpoints.get(checkpoint_stream_key(chain, endpoint, token_address, flow_label))
 
     def commit_data_transaction(self) -> None:
-        staged, checkpoints = self._require_transaction()
+        staged, checkpoints, runs = self._require_transaction()
         self.data = staged
         self.checkpoints = checkpoints
+        self.ingestion_runs = runs
         self._staged_data = None
         self._staged_checkpoints = None
+        self._staged_ingestion_runs = None
 
     def rollback_data_transaction(self) -> None:
         self._staged_data = None
         self._staged_checkpoints = None
+        self._staged_ingestion_runs = None
 
     def complete_ingestion_run(self, run_id: str, counts: dict[str, int]) -> None:
-        self.ingestion_runs[run_id].update(counts, status="success", finished_at=datetime.now(timezone.utc))
+        _, _, runs = self._require_transaction()
+        runs[run_id].update(counts, status="success", finished_at=datetime.now(timezone.utc))
 
     def fail_ingestion_run(self, run_id: str, error_type: str, error_summary: str, partial: bool = False) -> None:
         self.ingestion_runs[run_id].update(
