@@ -84,7 +84,14 @@ WHERE chain = %s AND endpoint = %s AND token_address = %s AND flow_label = %s;""
 CHECKPOINT_UPSERT_SQL = """INSERT INTO nansen.checkpoints (
     chain, endpoint, token_address, flow_label, last_complete_timestamp,
     last_success_run_id, updated_at, metadata
-) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+) SELECT %s, %s, %s, %s, %s, %s, %s, %s
+FROM nansen.ingestion_runs r
+WHERE r.run_id = %s
+  AND r.status = 'success'
+  AND r.chain = %s
+  AND r.endpoint = %s
+  AND r.token_address = %s
+  AND r.flow_label = %s
 ON CONFLICT (chain, endpoint, token_address, flow_label) DO UPDATE SET
     last_complete_timestamp = EXCLUDED.last_complete_timestamp,
     last_success_run_id = EXCLUDED.last_success_run_id,
@@ -307,7 +314,7 @@ class NansenRepository(Protocol):
     def commit_data_transaction(self) -> None: ...
     def rollback_data_transaction(self) -> None: ...
     def read_checkpoint(self, chain: str, endpoint: str, token_address: str, flow_label: Optional[str] = None) -> Optional[dict[str, Any]]: ...
-    def advance_checkpoint(self, chain: str, endpoint: str, token_address: str, last_complete_timestamp: datetime, run_id: str, status: str, complete: bool, flow_label: Optional[str] = None) -> None: ...
+    def advance_checkpoint(self, chain: str, endpoint: str, token_address: str, last_complete_timestamp: datetime, run_id: str, flow_label: Optional[str] = None) -> None: ...
 
 
 @dataclass
@@ -323,22 +330,11 @@ class InMemoryCheckpointRepository:
         return self.checkpoints.get(checkpoint_stream_key(chain, endpoint, token_address, flow_label))
 
     def advance_checkpoint(
-        self,
-        chain: str,
-        endpoint: str,
-        token_address: str,
-        last_complete_timestamp: datetime,
-        run_id: str,
-        status: str,
-        complete: bool,
+        self, chain: str, endpoint: str, token_address: str,
+        last_complete_timestamp: datetime, run_id: str,
         flow_label: Optional[str] = None,
     ) -> None:
-        validate_checkpoint_advance(status, complete)
-        self.checkpoints[checkpoint_stream_key(chain, endpoint, token_address, flow_label)] = {
-            "last_complete_timestamp": _utc(last_complete_timestamp, "last_complete_timestamp"),
-            "last_success_run_id": run_id,
-            "updated_at": datetime.now(timezone.utc),
-        }
+        raise PersistenceDesignError("checkpoint eligibility requires a persisted ingestion run")
 
 
 @dataclass
@@ -397,12 +393,18 @@ class InMemoryTransactionRepository:
 
     def advance_checkpoint(
         self, chain: str, endpoint: str, token_address: str,
-        last_complete_timestamp: datetime, run_id: str, status: str,
-        complete: bool, flow_label: Optional[str] = None,
+        last_complete_timestamp: datetime, run_id: str,
+        flow_label: Optional[str] = None,
     ) -> None:
-        _, checkpoints, _ = self._require_transaction()
-        validate_checkpoint_advance(status, complete)
-        checkpoints[checkpoint_stream_key(chain, endpoint, token_address, flow_label)] = {
+        _, checkpoints, runs = self._require_transaction()
+        canonical_token = _canonical_address(chain, token_address)
+        scope = canonical_request_scope(endpoint, flow_label)
+        run = runs.get(run_id)
+        if run is None or run.get("status") != "success":
+            raise PersistenceDesignError("checkpoint requires an existing successful ingestion run")
+        if (run.get("chain"), run.get("endpoint"), run.get("token_address"), run.get("flow_label")) != (chain, endpoint, canonical_token, scope):
+            raise PersistenceDesignError("checkpoint run does not match stream identity")
+        checkpoints[checkpoint_stream_key(chain, endpoint, canonical_token, scope)] = {
             "last_complete_timestamp": _utc(last_complete_timestamp, "last_complete_timestamp"),
             "last_success_run_id": run_id,
             "updated_at": datetime.now(timezone.utc),

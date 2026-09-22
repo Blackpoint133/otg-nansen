@@ -18,7 +18,6 @@ from otg_nansen.persistence import (
     INGESTION_RUN_INSERT_SQL,
     INGESTION_RUN_SUCCESS_SQL,
     TOKEN_INFORMATION_INSERT_SQL,
-    InMemoryCheckpointRepository,
     InMemoryTransactionRepository,
     NansenRepository,
     PersistenceDesignError,
@@ -181,14 +180,71 @@ def test_ingestion_provenance_contains_token_and_scope():
 
 
 def test_checkpoint_cannot_advance_for_partial_or_failed_run():
-    repository = InMemoryCheckpointRepository()
+    repository = InMemoryTransactionRepository()
     timestamp = datetime(2026, 9, 22, tzinfo=timezone.utc)
+    repository.begin_ingestion_run(map_ingestion_run(
+        run_id="run-1", started_at=timestamp, status="running", chain="avalanche",
+        endpoint="flows", token_address=TOKEN, flow_label="smart_money"))
+    repository.begin_data_transaction()
     with pytest.raises(PersistenceDesignError):
-        repository.advance_checkpoint("avalanche", "flows", TOKEN, timestamp, "run-1", "partial", False, "smart_money")
+        repository.advance_checkpoint("avalanche", "flows", TOKEN, timestamp, "run-1", "smart_money")
+    repository.rollback_data_transaction()
     assert repository.read_checkpoint("avalanche", "flows", TOKEN, "smart_money") is None
-    repository.advance_checkpoint("avalanche", "flows", TOKEN, timestamp, "run-2", "success", True, "smart_money")
+    repository.begin_ingestion_run(map_ingestion_run(
+        run_id="run-2", started_at=timestamp, status="running", chain="avalanche",
+        endpoint="flows", token_address=TOKEN, flow_label="smart_money"))
+    repository.begin_data_transaction()
+    repository.complete_ingestion_run("run-2", {})
+    repository.advance_checkpoint("avalanche", "flows", TOKEN, timestamp, "run-2", "smart_money")
+    repository.commit_data_transaction()
     assert repository.read_checkpoint("avalanche", "flows", TOKEN, "smart_money")["last_success_run_id"] == "run-2"
     assert repository.read_checkpoint("avalanche", "flows", TOKEN, "exchange") is None
+
+
+def test_checkpoint_rejects_wrong_stream_identity():
+    timestamp = datetime(2026, 9, 22, tzinfo=timezone.utc)
+    repository = InMemoryTransactionRepository()
+    repository.begin_ingestion_run(map_ingestion_run(
+        run_id="run-stream", started_at=timestamp, status="running", chain="avalanche",
+        endpoint="flows", token_address=TOKEN, flow_label="smart_money"))
+    repository.begin_data_transaction()
+    repository.complete_ingestion_run("run-stream", {})
+    with pytest.raises(PersistenceDesignError):
+        repository.advance_checkpoint("avalanche", "flows", TOKEN, timestamp, "run-stream", "exchange")
+    repository.rollback_data_transaction()
+
+
+@pytest.mark.parametrize("chain, endpoint, token, scope", [
+    ("solana", "flows", TOKEN, "smart_money"),
+    ("avalanche", "inventory", TOKEN, ""),
+    ("avalanche", "flows", "0x0000000000000000000000000000000000000002", "smart_money"),
+])
+def test_checkpoint_rejects_wrong_chain_endpoint_or_token(chain, endpoint, token, scope):
+    timestamp = datetime(2026, 9, 22, tzinfo=timezone.utc)
+    repository = InMemoryTransactionRepository()
+    repository.begin_ingestion_run(map_ingestion_run(
+        run_id="run-identity", started_at=timestamp, status="running", chain="avalanche",
+        endpoint="flows", token_address=TOKEN, flow_label="smart_money"))
+    repository.begin_data_transaction()
+    repository.complete_ingestion_run("run-identity", {})
+    with pytest.raises(PersistenceDesignError):
+        repository.advance_checkpoint(chain, endpoint, token, timestamp, "run-identity", scope)
+    repository.rollback_data_transaction()
+
+
+@pytest.mark.parametrize("partial", [False, True])
+def test_checkpoint_rejects_failed_and_partial_runs(partial):
+    timestamp = datetime(2026, 9, 22, tzinfo=timezone.utc)
+    repository = InMemoryTransactionRepository()
+    run_id = "run-partial" if partial else "run-failed"
+    repository.begin_ingestion_run(map_ingestion_run(
+        run_id=run_id, started_at=timestamp, status="running", chain="avalanche",
+        endpoint="flows", token_address=TOKEN, flow_label="smart_money"))
+    repository.fail_ingestion_run(run_id, "TestFailure", "synthetic", partial=partial)
+    repository.begin_data_transaction()
+    with pytest.raises(PersistenceDesignError):
+        repository.advance_checkpoint("avalanche", "flows", TOKEN, timestamp, run_id, "smart_money")
+    repository.rollback_data_transaction()
 
 
 def test_migration_is_reviewable_but_not_executed():
@@ -207,6 +263,7 @@ def test_migration_is_reviewable_but_not_executed():
     assert "flow_label = btrim(flow_label)" in text
     assert "endpoint = 'flows'" in text
     assert "request_scope->>'token_address' = token_address" in text
+    assert "FOREIGN KEY (last_success_run_id, chain, endpoint, token_address, flow_label)" in text
 
 
 def test_parameterized_sql_contains_required_semantics():
@@ -221,6 +278,9 @@ def test_parameterized_sql_contains_required_semantics():
     assert "WHERE nansen.flows.is_complete IS NOT TRUE OR EXCLUDED.is_complete IS TRUE" in FLOW_UPSERT_SQL
     assert "ON CONFLICT (trade_key) DO UPDATE" in DEX_TRADE_UPSERT_SQL
     assert "DO NOTHING" in TOKEN_INFORMATION_INSERT_SQL
+    assert "FROM nansen.ingestion_runs r" in CHECKPOINT_UPSERT_SQL
+    assert "r.status = 'success'" in CHECKPOINT_UPSERT_SQL
+    assert "r.flow_label = %s" in CHECKPOINT_UPSERT_SQL
 
 
 def test_in_memory_transaction_success_and_failure_lifecycle():
@@ -232,8 +292,8 @@ def test_in_memory_transaction_success_and_failure_lifecycle():
         endpoint="flows", token_address=TOKEN, flow_label="smart_money"))
     success.begin_data_transaction()
     success.store_flows([flow])
-    success.advance_checkpoint("avalanche", "flows", TOKEN, timestamp, "run-success", "success", True, "smart_money")
     success.complete_ingestion_run("run-success", {"records_inserted": 1})
+    success.advance_checkpoint("avalanche", "flows", TOKEN, timestamp, "run-success", "smart_money")
     assert success.ingestion_runs["run-success"]["status"] == "running"
     success.commit_data_transaction()
     assert success.data["flows"]
@@ -246,8 +306,8 @@ def test_in_memory_transaction_success_and_failure_lifecycle():
         endpoint="flows", token_address=TOKEN, flow_label="smart_money"))
     failed.begin_data_transaction()
     failed.store_flows([flow])
-    failed.advance_checkpoint("avalanche", "flows", TOKEN, timestamp, "run-failed", "success", True, "smart_money")
     failed.complete_ingestion_run("run-failed", {"records_inserted": 1})
+    failed.advance_checkpoint("avalanche", "flows", TOKEN, timestamp, "run-failed", "smart_money")
     failed.rollback_data_transaction()
     assert failed.ingestion_runs["run-failed"]["status"] == "running"
     failed.fail_ingestion_run("run-failed", "NormalizationError", "safe summary")

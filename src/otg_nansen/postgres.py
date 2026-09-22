@@ -18,6 +18,7 @@ from .persistence import (
     INGESTION_RUN_INSERT_SQL,
     INGESTION_RUN_SUCCESS_SQL,
     TOKEN_INFORMATION_INSERT_SQL,
+    PersistenceDesignError,
     map_dex_trade,
     map_flow,
     map_token_information,
@@ -154,12 +155,23 @@ class PostgresRepository:
         return canonical_request_scope(endpoint, flow_label)
 
     def advance_checkpoint(self, chain: str, endpoint: str, token_address: str, last_complete_timestamp: datetime,
-                           run_id: str, status: str, complete: bool, flow_label: Optional[str] = None) -> None:
-        if status != "success" or not complete:
-            raise RuntimeError("checkpoint requires a complete successful run")
-        values = (chain, endpoint, self._canonical_token(chain, token_address), self._scope(endpoint, flow_label),
-                  last_complete_timestamp, run_id, datetime.now(last_complete_timestamp.tzinfo), Jsonb({}))
-        self._data_cursor().execute(CHECKPOINT_UPSERT_SQL, values)
+                           run_id: str, flow_label: Optional[str] = None) -> None:
+        canonical_token = self._canonical_token(chain, token_address)
+        scope = self._scope(endpoint, flow_label)
+        eligible = self._data_cursor().execute(
+            """SELECT 1 FROM nansen.ingestion_runs
+               WHERE run_id = %s AND status = 'success' AND chain = %s
+                 AND endpoint = %s AND token_address = %s AND flow_label = %s""",
+            (run_id, chain, endpoint, canonical_token, scope),
+        ).fetchone()
+        if eligible is None:
+            raise PersistenceDesignError("checkpoint run is not a matching successful ingestion run")
+        values = (chain, endpoint, canonical_token, scope, last_complete_timestamp, run_id,
+                  datetime.now(last_complete_timestamp.tzinfo), Jsonb({}), run_id, chain, endpoint,
+                  canonical_token, scope)
+        cursor = self._data_cursor().execute(CHECKPOINT_UPSERT_SQL, values)
+        if cursor.rowcount not in (0, 1):
+            raise PersistenceDesignError("unexpected checkpoint upsert result")
 
     def complete_ingestion_run(self, run_id: str, counts: dict[str, int]) -> None:
         values = (datetime.now().astimezone(), counts.get("records_received", 0), counts.get("records_normalized", 0),

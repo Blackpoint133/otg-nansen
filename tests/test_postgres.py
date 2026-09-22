@@ -20,3 +20,5 @@ def test_migration_has_no_drop_and_has_target_scope_guards():
     assert ") IS TRUE" in text
     assert "request_scope->>'chain' = chain" in text
     assert "request_scope->>'flow_label' = flow_label" in text
+    assert "UNIQUE (run_id, chain, endpoint, token_address, flow_label)" in text
+    assert "FOREIGN KEY (last_success_run_id, chain, endpoint, token_address, flow_label)" in text

@@ -83,6 +83,7 @@ CREATE TABLE nansen.ingestion_runs (
     records_updated_or_conflicted INTEGER NOT NULL DEFAULT 0,
     error_type TEXT,
     error_summary TEXT,
+    UNIQUE (run_id, chain, endpoint, token_address, flow_label),
     CHECK (
         (endpoint = 'flows' AND flow_label = btrim(flow_label) AND btrim(flow_label) <> '')
         OR (endpoint <> 'flows' AND flow_label = '')
@@ -116,6 +117,8 @@ CREATE TABLE nansen.checkpoints (
     updated_at TIMESTAMPTZ NOT NULL,
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     PRIMARY KEY (chain, endpoint, token_address, flow_label),
+    FOREIGN KEY (last_success_run_id, chain, endpoint, token_address, flow_label)
+        REFERENCES nansen.ingestion_runs (run_id, chain, endpoint, token_address, flow_label),
     CHECK (
         (endpoint = 'flows' AND flow_label = btrim(flow_label) AND btrim(flow_label) <> '')
         OR (endpoint <> 'flows' AND flow_label = '')

@@ -81,3 +81,20 @@ force push was used.
 An authorized PostgreSQL administrator should grant CREATE on
 `server_otg_staging` to `gunz_user`, then rerun only the guarded migration and
 opt-in integration suite. Production must remain untouched.
+
+## TASK 012R ADDENDUM
+
+External review found that the DEX cleanup predicate did not match the Task
+012 trade identifier, the integration source did not cover all JSON null/type
+and non-object request-scope cases, checkpoint advancement trusted caller-
+supplied status, and a checkpoint could reference a run from another flow
+scope.
+
+Task 012R corrected these issues before any PostgreSQL migration execution.
+Synthetic data uses exact Task 012 identifiers with FK-safe cleanup. The
+integration harness now contains the complete request-scope invalid-case
+matrix, separate matching smart-money and exchange runs/checkpoints, and
+cleanup assertions for every table. The public checkpoint API and SQL now
+validate actual successful run status and exact stream identity; a composite
+foreign key prevents cross-stream references. The staging CREATE privilege
+blocker remains unchanged.

@@ -26,3 +26,7 @@ The guarded staging command is `python -m otg_nansen.migrate_staging`; it
 refuses any database other than `server_otg_staging`. PostgreSQL integration
 tests are opt-in with `NANSEN_RUN_POSTGRES_TESTS=1`; default pytest remains
 database-free.
+The checkpoint API does not accept caller-authoritative status flags. It
+requires a staged successful run with matching stream identity, and rejects
+zero-row eligibility. Flow scopes use separate successful runs and checkpoints
+for each stream. The migration remains NOT APPLIED.

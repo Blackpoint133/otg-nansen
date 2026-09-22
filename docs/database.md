@@ -70,3 +70,8 @@ Task 011 provides the selected psycopg3 adapter and a guarded migration
 command. The command forces `server_otg_staging`, verifies `current_database`,
 and uses bounded lock and statement timeouts. The migration remains NOT
 APPLIED pending staging CREATE permission.
+Checkpoint advancement now validates the actual successful ingestion run,
+canonical token, endpoint, chain, and flow scope. The checkpoint SQL uses an
+`INSERT ... SELECT` eligibility guard, and the schema composite foreign key
+prevents cross-stream run references. Success status is updated before the
+checkpoint in the same transaction.
