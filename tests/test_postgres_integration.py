@@ -14,8 +14,8 @@ from psycopg.types.json import Jsonb
 
 from otg_nansen.models import NormalizedFlowRecord
 from otg_nansen.normalize import normalize_dex_trades, normalize_flows, normalize_token_information
-from otg_nansen.persistence import INGESTION_RUN_INSERT_SQL, map_dex_trade, map_flow, map_ingestion_run
-from otg_nansen.postgres import PostgresRepository
+from otg_nansen.persistence import INGESTION_RUN_INSERT_SQL, PersistenceDesignError, map_dex_trade, map_flow, map_ingestion_run
+from otg_nansen.postgres import PostgresRepository, staging_connection_kwargs
 
 
 pytestmark = pytest.mark.postgres
@@ -37,6 +37,13 @@ def _run(run_id: str, label: str) -> dict:
     return map_ingestion_run(
         run_id=run_id, started_at=datetime(2026, 9, 22, tzinfo=timezone.utc), status="running",
         chain="avalanche", endpoint="flows", token_address=TOKEN, flow_label=label,
+    )
+
+
+def _run_for(run_id: str, label: str, token_address: str, endpoint: str = "flows") -> dict:
+    return map_ingestion_run(
+        run_id=run_id, started_at=datetime(2026, 9, 22, tzinfo=timezone.utc), status="running",
+        chain="avalanche", endpoint=endpoint, token_address=token_address, flow_label=label,
     )
 
 
@@ -204,4 +211,124 @@ def test_staging_repository_lifecycle_and_constraints():
         assert _count(repo, "token_information", "name = %s", "TASK012_TEST_TOKEN") == 0
         assert _count(repo, "checkpoints", "last_success_run_id IN (%s, %s, %s, %s)", tuple(RUN_IDS)) == 0
         assert _count(repo, "ingestion_runs", "run_id IN (%s, %s, %s, %s)", tuple(RUN_IDS)) == 0
+        repo.close()
+
+
+@pytest.mark.skipif(os.getenv("NANSEN_RUN_POSTGRES_TESTS") != "1", reason="staging PostgreSQL tests are opt-in")
+def test_task013c_checkpoint_integrity_and_external_visibility():
+    repo = PostgresRepository.from_env()
+    base_token = "0x00000000000000000000000000000000000000Aa"
+    lower_token = base_token.lower()
+    flow = normalize_flows(_load("flows_avalanche.json"), chain="avalanche", token_address=base_token, flow_label="task013c_case")[0]
+    flow_lower = replace(flow, token_address=lower_token)
+    smart_flow = replace(flow, flow_label="task013c_smart_money")
+    exchange_flow = replace(flow, flow_label="task013c_exchange")
+    run_ids = {
+        "running": "00000000-0000-0013-0000-000000000001",
+        "failed": "00000000-0000-0013-0000-000000000002",
+        "partial": "00000000-0000-0013-0000-000000000003",
+        "smart": "00000000-0000-0013-0000-000000000004",
+        "exchange": "00000000-0000-0013-0000-000000000005",
+        "case": "00000000-0000-0013-0000-000000000006",
+        "visible": "00000000-0000-0013-0000-000000000007",
+    }
+
+    def cleanup():
+        with repo.audit_connection.transaction():
+            for run_id in run_ids.values():
+                repo.audit_connection.execute("DELETE FROM nansen.checkpoints WHERE last_success_run_id = %s", (run_id,))
+            repo.audit_connection.execute(
+                "DELETE FROM nansen.flows WHERE flow_label IN (%s, %s, %s, %s)",
+                ("task013c_case", "task013c_smart_money", "task013c_exchange", "task013c_visible"),
+            )
+            for run_id in run_ids.values():
+                repo.audit_connection.execute("DELETE FROM nansen.ingestion_runs WHERE run_id = %s", (run_id,))
+
+    def assert_no_checkpoint(chain, endpoint, token, label):
+        assert repo.read_checkpoint(chain, endpoint, token, label) is None
+
+    try:
+        cleanup()
+        for name, status in (("running", "running"), ("failed", "failed"), ("partial", "partial")):
+            repo.begin_ingestion_run(_run_for(run_ids[name], f"task013c_{name}", base_token))
+            if status != "running":
+                repo.fail_ingestion_run(run_ids[name], "Synthetic", "Task 013C status test", partial=status == "partial")
+            with pytest.raises(PersistenceDesignError):
+                repo.begin_data_transaction()
+                repo.advance_checkpoint("avalanche", "flows", base_token, flow.date, run_ids[name], f"task013c_{name}")
+            repo.rollback_data_transaction()
+            assert_no_checkpoint("avalanche", "flows", base_token, f"task013c_{name}")
+
+        repo.begin_ingestion_run(_run_for(run_ids["smart"], "task013c_smart_money", base_token))
+        repo.begin_ingestion_run(_run_for(run_ids["exchange"], "task013c_exchange", base_token))
+        for run_id, model in ((run_ids["smart"], smart_flow), (run_ids["exchange"], exchange_flow)):
+            repo.begin_data_transaction()
+            repo.store_flows([model])
+            repo.complete_ingestion_run(run_id, {"records_inserted": 1})
+            repo.advance_checkpoint("avalanche", "flows", base_token, model.date, run_id, model.flow_label)
+            repo.commit_data_transaction()
+        smart_checkpoint = repo.read_checkpoint("avalanche", "flows", base_token, "task013c_smart_money")
+        exchange_checkpoint = repo.read_checkpoint("avalanche", "flows", base_token, "task013c_exchange")
+        assert smart_checkpoint["last_success_run_id"] == UUID(run_ids["smart"])
+        assert exchange_checkpoint["last_success_run_id"] == UUID(run_ids["exchange"])
+        assert smart_checkpoint["flow_label"] != exchange_checkpoint["flow_label"]
+        assert _count(repo, "flows", "flow_label IN (%s, %s)", ("task013c_smart_money", "task013c_exchange")) == 2
+
+        mismatch_cases = (
+            ("solana", "flows", base_token, "task013c_smart_money"),
+            ("avalanche", "inventory", base_token, ""),
+            ("avalanche", "flows", "0x00000000000000000000000000000000000000Bb", "task013c_smart_money"),
+            ("avalanche", "flows", base_token, "task013c_exchange"),
+        )
+        for index, (chain, endpoint, token, label) in enumerate(mismatch_cases):
+            with pytest.raises(PersistenceDesignError):
+                repo.begin_data_transaction()
+                repo.advance_checkpoint(chain, endpoint, token, flow.date, run_ids["smart"], label or None)
+            repo.rollback_data_transaction()
+            if label == "task013c_exchange":
+                assert repo.read_checkpoint(chain, endpoint, token, label)["last_success_run_id"] == UUID(run_ids["exchange"])
+            else:
+                assert_no_checkpoint(chain, endpoint, token, label or None)
+        with pytest.raises(PersistenceDesignError):
+            repo.begin_data_transaction()
+            repo.advance_checkpoint("avalanche", "flows", base_token, flow.date, run_ids["exchange"], "task013c_smart_money")
+        repo.rollback_data_transaction()
+        assert repo.read_checkpoint("avalanche", "flows", base_token, "task013c_smart_money")["last_success_run_id"] == UUID(run_ids["smart"])
+
+        repo.begin_ingestion_run(_run_for(run_ids["case"], "task013c_case", base_token))
+        repo.begin_data_transaction()
+        repo.store_flows([flow])
+        repo.store_flows([flow_lower])
+        repo.complete_ingestion_run(run_ids["case"], {"records_inserted": 2})
+        repo.advance_checkpoint("avalanche", "flows", lower_token, flow.date, run_ids["case"], "task013c_case")
+        repo.commit_data_transaction()
+        assert _count(repo, "flows", "flow_label = %s", "task013c_case") == 1
+        persisted_token = repo.audit_connection.execute(
+            "SELECT token_address FROM nansen.flows WHERE flow_label = %s", ("task013c_case",)
+        ).fetchone()[0]
+        assert persisted_token == lower_token
+        assert repo.read_checkpoint("avalanche", "flows", base_token, "task013c_case")["last_success_run_id"] == UUID(run_ids["case"])
+
+        repo.begin_ingestion_run(_run_for(run_ids["visible"], "task013c_visible", base_token))
+        visible_flow = replace(flow, flow_label="task013c_visible")
+        repo.begin_data_transaction()
+        repo.store_flows([visible_flow])
+        repo.complete_ingestion_run(run_ids["visible"], {"records_inserted": 1})
+        repo.advance_checkpoint("avalanche", "flows", base_token, visible_flow.date, run_ids["visible"], "task013c_visible")
+        observer_kwargs = staging_connection_kwargs()
+        with psycopg.connect(**observer_kwargs, autocommit=True) as observer:
+            assert observer.execute("SELECT status FROM nansen.ingestion_runs WHERE run_id = %s", (run_ids["visible"],)).fetchone()[0] == "running"
+            assert observer.execute("SELECT count(*) FROM nansen.flows WHERE flow_label = %s", ("task013c_visible",)).fetchone()[0] == 0
+            assert observer.execute("SELECT count(*) FROM nansen.checkpoints WHERE flow_label = %s", ("task013c_visible",)).fetchone()[0] == 0
+        repo.commit_data_transaction()
+        with psycopg.connect(**observer_kwargs, autocommit=True) as observer:
+            assert observer.execute("SELECT status FROM nansen.ingestion_runs WHERE run_id = %s", (run_ids["visible"],)).fetchone()[0] == "success"
+            assert observer.execute("SELECT count(*) FROM nansen.flows WHERE flow_label = %s", ("task013c_visible",)).fetchone()[0] == 1
+            assert observer.execute("SELECT count(*) FROM nansen.checkpoints WHERE flow_label = %s", ("task013c_visible",)).fetchone()[0] == 1
+    finally:
+        repo.rollback_data_transaction()
+        cleanup()
+        assert _count(repo, "flows", "flow_label LIKE %s", "task013c_%") == 0
+        assert _count(repo, "checkpoints", "flow_label LIKE %s", "task013c_%") == 0
+        assert _count(repo, "ingestion_runs", "run_id::text LIKE %s", "00000000-0000-0013-%") == 0
         repo.close()

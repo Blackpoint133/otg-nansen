@@ -161,3 +161,13 @@ Production remains outside the migration and integration target.
 
 Review the staging evidence externally, then design the first bounded,
 fixture-backed ingestion orchestration step. Do not run production ingestion.
+
+## TASK 013C ADDENDUM
+
+External review found that the original Task 013B integration run did not
+physically exercise every checkpoint-negative and Avalanche case-idempotency
+case summarized by its acceptance section. Task 013C added dedicated real
+staging coverage for running, failed, and partial run rejection; wrong chain,
+endpoint, token, and flow scope rejection; reciprocal smart-money/exchange
+stream separation; Avalanche case-only persistence identity; and external
+pre-commit/post-commit visibility. The genuine Task 013B results remain valid.
