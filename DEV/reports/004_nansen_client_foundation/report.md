@@ -138,3 +138,12 @@ endpoint coverage are intentionally not implemented yet.
 Task 005 should add a small fixture-backed normalization boundary for the
 approved Avalanche MVP endpoints, without PostgreSQL writes or historical
 backfill, after external review of this client foundation.
+
+## TASK005_CORRECTION_ADDENDUM
+
+External review found that the original Task 004 fixtures incorrectly modeled
+token-information as a paginated list and used simplified field sets for
+flows and DEX trades. Task 005 corrected those fixtures and added shape tests
+against the current documented and live response contracts. The HTTP client
+foundation remained largely valid; the corrected fixtures are now the contract
+baseline for future normalization.

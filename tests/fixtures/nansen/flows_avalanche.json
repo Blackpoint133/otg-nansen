@@ -1,11 +1,18 @@
 {
   "data": [{
-    "chain": "avalanche",
-    "token_address": "0xTOKEN_PLACEHOLDER",
-    "timestamp": "2026-09-20T12:00:00Z",
-    "inflow_usd": 1000.0,
-    "outflow_usd": 250.0,
-    "label": "Smart Trader"
+    "date": "2026-09-20T12:00:00Z",
+    "price_usd": 0.01,
+    "token_amount": 1000.0,
+    "value_usd": 10.0,
+    "holders_count": 100,
+    "total_inflows_count": 5,
+    "total_outflows_count": 3,
+    "bucket_end": "2026-09-20T12:59:59Z",
+    "is_complete": true,
+    "total_inflows_cex": 1,
+    "total_inflows_dex": 4,
+    "total_outflows_cex": 1,
+    "total_outflows_dex": 2
   }],
   "pagination": {"page": 1, "per_page": 2, "is_last_page": true}
 }

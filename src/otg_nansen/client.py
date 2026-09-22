@@ -12,7 +12,9 @@ from .config import NansenConfig
 from .errors import (
     ConfigurationError,
     NansenHTTPError,
+    NansenTransportError,
     RequestBudgetExceeded,
+    ResponseContractError,
     ResponseDecodeError,
 )
 
@@ -53,9 +55,11 @@ class NansenClient:
                     headers=self.headers,
                     timeout=self.config.timeout_seconds,
                 )
-            except requests.Timeout as exc:
+            except requests.RequestException as exc:
                 if retry_number >= self.config.max_retries:
-                    raise NansenHTTPError(endpoint, 0, "request timed out") from exc
+                    raise NansenTransportError(
+                        f"Nansen transport failure: endpoint={endpoint} error={self._safe_summary(str(exc))}"
+                    ) from exc
                 self._sleeper(self._backoff(retry_number))
                 continue
             if response.status_code in RETRYABLE_STATUSES and retry_number < self.config.max_retries:
@@ -82,11 +86,14 @@ class NansenClient:
         records: list[Any] = []
         for _ in range(self.config.max_pages):
             response = self.request(endpoint, request_payload)
-            data = response.get("data", [])
-            if isinstance(data, list):
-                records.extend(data)
-            response_pagination = response.get("pagination") or {}
-            if response_pagination.get("is_last_page", True):
+            data = response.get("data")
+            response_pagination = response.get("pagination")
+            if not isinstance(data, list):
+                raise ResponseContractError(f"Paginated endpoint returned non-list data: endpoint={endpoint}")
+            if not isinstance(response_pagination, dict) or not isinstance(response_pagination.get("is_last_page"), bool):
+                raise ResponseContractError(f"Paginated endpoint returned invalid pagination: endpoint={endpoint}")
+            records.extend(data)
+            if response_pagination["is_last_page"]:
                 return records
             pagination["page"] = int(pagination["page"]) + 1
         return records

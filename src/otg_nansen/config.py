@@ -1,6 +1,7 @@
 """Non-secret client configuration and verified public token identities."""
 
 from dataclasses import dataclass
+import math
 import os
 from typing import Optional
 
@@ -33,6 +34,28 @@ def _nonnegative_int(value: str, name: str) -> int:
     return parsed
 
 
+def _positive_float(value: str, name: str) -> float:
+    try:
+        parsed = float(value)
+    except ValueError as exc:
+        raise ConfigurationError(f"{name} must be a number") from exc
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise ConfigurationError(f"{name} must be finite and greater than zero")
+    return parsed
+
+
+def _optional_nonnegative_float(value: Optional[str], name: str) -> Optional[float]:
+    if value is None or value == "":
+        return None
+    try:
+        parsed = float(value)
+    except ValueError as exc:
+        raise ConfigurationError(f"{name} must be a number") from exc
+    if not math.isfinite(parsed) or parsed < 0:
+        raise ConfigurationError(f"{name} must be finite and nonnegative")
+    return parsed
+
+
 @dataclass(frozen=True)
 class NansenConfig:
     """Bounded settings for one client run."""
@@ -54,13 +77,11 @@ class NansenConfig:
         return cls(
             api_key=api_key,
             base_url=os.getenv("NANSEN_API_BASE_URL", DEFAULT_BASE_URL).rstrip("/"),
-            timeout_seconds=float(os.getenv("NANSEN_TIMEOUT_SECONDS", "20")),
+            timeout_seconds=_positive_float(os.getenv("NANSEN_TIMEOUT_SECONDS", "20"), "NANSEN_TIMEOUT_SECONDS"),
             max_retries=_nonnegative_int(os.getenv("NANSEN_MAX_RETRIES", "2"), "NANSEN_MAX_RETRIES"),
             max_calls=_positive_int(os.getenv("NANSEN_MAX_CALLS", "20"), "NANSEN_MAX_CALLS"),
-            rate_pacing_seconds=(
-                float(os.environ["NANSEN_RATE_PACING_SECONDS"])
-                if os.getenv("NANSEN_RATE_PACING_SECONDS")
-                else None
+            rate_pacing_seconds=_optional_nonnegative_float(
+                os.getenv("NANSEN_RATE_PACING_SECONDS"), "NANSEN_RATE_PACING_SECONDS"
             ),
             page_size=_positive_int(os.getenv("NANSEN_PAGE_SIZE", "2"), "NANSEN_PAGE_SIZE"),
             max_pages=_positive_int(os.getenv("NANSEN_MAX_PAGES", "10"), "NANSEN_MAX_PAGES"),

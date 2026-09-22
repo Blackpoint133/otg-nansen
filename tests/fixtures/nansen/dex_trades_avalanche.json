@@ -1,11 +1,18 @@
 {
   "data": [{
-    "chain": "avalanche",
-    "token_address": "0xTOKEN_PLACEHOLDER",
     "block_timestamp": "2026-09-20T12:00:00Z",
-    "side": "Buy",
+    "transaction_hash": "0xTRANSACTION_PLACEHOLDER",
+    "trader_address": "0xTRADER_PLACEHOLDER",
+    "trader_address_label": "Smart Trader",
+    "action": "BUY",
+    "token_address": "0xTOKEN_PLACEHOLDER",
+    "token_name": "GUN",
     "token_amount": 10.0,
-    "trade_value_usd": 100.0
+    "traded_token_address": "0xTRADED_TOKEN_PLACEHOLDER",
+    "traded_token_name": "USDC",
+    "traded_token_amount": 1.0,
+    "estimated_swap_price_usd": 0.1,
+    "estimated_value_usd": 1.0
   }],
   "pagination": {"page": 1, "per_page": 2, "is_last_page": true}
 }

@@ -1,4 +1,5 @@
 {
   "data": [],
-  "pagination": {"page": 1, "per_page": 2, "is_last_page": true}
+  "pagination": {"page": 1, "per_page": 2, "is_last_page": true},
+  "warnings": []
 }

@@ -9,7 +9,14 @@ import requests
 
 from otg_nansen.client import NansenClient
 from otg_nansen.config import NansenConfig, TOKEN_IDENTITIES
-from otg_nansen.errors import ConfigurationError, NansenHTTPError, RequestBudgetExceeded, ResponseDecodeError
+from otg_nansen.errors import (
+    ConfigurationError,
+    NansenHTTPError,
+    NansenTransportError,
+    RequestBudgetExceeded,
+    ResponseContractError,
+    ResponseDecodeError,
+)
 
 
 class FakeResponse:
@@ -48,6 +55,25 @@ def test_config_requires_key(monkeypatch):
     monkeypatch.delenv("NANSEN_API_KEY", raising=False)
     with pytest.raises(ConfigurationError):
         NansenConfig.from_env()
+
+
+@pytest.mark.parametrize("variable,value", [
+    ("NANSEN_TIMEOUT_SECONDS", "bad"),
+    ("NANSEN_TIMEOUT_SECONDS", "0"),
+    ("NANSEN_TIMEOUT_SECONDS", "-1"),
+    ("NANSEN_TIMEOUT_SECONDS", "nan"),
+    ("NANSEN_TIMEOUT_SECONDS", "inf"),
+    ("NANSEN_RATE_PACING_SECONDS", "bad"),
+    ("NANSEN_RATE_PACING_SECONDS", "-1"),
+    ("NANSEN_RATE_PACING_SECONDS", "nan"),
+    ("NANSEN_RATE_PACING_SECONDS", "inf"),
+])
+def test_invalid_float_configuration_is_safe(monkeypatch, variable, value):
+    monkeypatch.setenv("NANSEN_API_KEY", "fake-secret-key")
+    monkeypatch.setenv(variable, value)
+    with pytest.raises(ConfigurationError) as error:
+        NansenConfig.from_env()
+    assert "fake-secret-key" not in str(error.value)
 
 
 def test_token_configuration_is_public_and_stable():
@@ -105,6 +131,24 @@ def test_timeout_is_bounded_and_retries():
     assert len(session.calls) == 2
 
 
+def test_connection_failure_is_project_error_and_retries():
+    api, session = client([requests.ConnectionError("connection failed"), FakeResponse(body={})], max_retries=1)
+    assert api.request("/network", {}) == {}
+    assert api.requests_attempted == 2
+    assert len(session.calls) == 2
+
+
+def test_transport_exhaustion_is_safe_and_redacts_key():
+    secret = "fake-secret-key"
+    settings = NansenConfig(api_key=secret, max_retries=1)
+    session = FakeSession([requests.ConnectionError(f"failed with {secret}"), requests.ConnectionError(f"failed with {secret}")])
+    api = NansenClient(settings, session=session, sleeper=lambda _: None)
+    with pytest.raises(NansenTransportError) as error:
+        api.request("/network", {})
+    assert secret not in str(error.value)
+    assert api.requests_attempted == 2
+
+
 def test_retry_exhaustion_is_safe():
     api, _ = client([FakeResponse(503, text="temporary")], max_retries=0)
     with pytest.raises(NansenHTTPError):
@@ -133,6 +177,31 @@ def test_pagination_stops_at_max_pages():
     responses = [FakeResponse(body={"data": [1], "pagination": {"is_last_page": False}}) for _ in range(2)]
     api, _ = client(responses, max_pages=2)
     assert api.paginate("/pages", {}) == [1, 1]
+
+
+def test_pagination_rejects_non_list_data():
+    api, _ = client([FakeResponse(body={"data": {"name": "GUN"}, "pagination": {"is_last_page": True}})])
+    with pytest.raises(ResponseContractError):
+        api.paginate("/pages", {})
+
+
+def test_pagination_rejects_malformed_pagination():
+    api, _ = client([FakeResponse(body={"data": [], "pagination": {}})])
+    with pytest.raises(ResponseContractError):
+        api.paginate("/pages", {})
+
+
+def test_contract_fixtures_match_endpoint_shapes():
+    fixture_dir = Path(__file__).parent / "fixtures" / "nansen"
+    token = json.loads((fixture_dir / "token_information_avalanche.json").read_text(encoding="utf-8"))
+    flows = json.loads((fixture_dir / "flows_avalanche.json").read_text(encoding="utf-8"))
+    trades = json.loads((fixture_dir / "dex_trades_avalanche.json").read_text(encoding="utf-8"))
+    assert isinstance(token["data"], dict)
+    assert set(("token_details", "spot_metrics")) <= set(token["data"])
+    assert isinstance(flows["data"], list)
+    assert set(("date", "price_usd", "token_amount", "value_usd", "holders_count", "total_inflows_count", "total_outflows_count")) <= set(flows["data"][0])
+    assert isinstance(trades["data"], list)
+    assert set(("block_timestamp", "transaction_hash", "trader_address", "action", "estimated_swap_price_usd", "estimated_value_usd")) <= set(trades["data"][0])
 
 
 def test_empty_fixture_shape_is_supported():

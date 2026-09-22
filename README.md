@@ -22,4 +22,5 @@ Phase 0A bootstrap and Phase 0B reconnaissance are complete. A bounded Nansen
 client foundation and fixture-first contract tests are now implemented. The
 evidence supports a primary Avalanche MVP source with Solana retained as a
 tested secondary source. Persistence and parser business logic remain later
-phases.
+phases. The client contracts are represented by sanitized fixtures and strict
+shape tests; persistence remains unimplemented.

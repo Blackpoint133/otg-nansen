@@ -24,3 +24,11 @@ class NansenHTTPError(NansenError):
 
 class ResponseDecodeError(NansenError):
     """Raised when a successful response is not valid JSON."""
+
+
+class ResponseContractError(NansenError):
+    """Raised when a response does not match the endpoint contract."""
+
+
+class NansenTransportError(NansenError):
+    """Raised when a bounded request fails at the transport layer."""
