@@ -250,3 +250,14 @@ documentation or support, then review it against the captured warning in a
 controlled, non-persistent validation. Do not relax the matcher by heuristic,
 apply migration 004, start historical backfill, or begin Task 024 until the
 warning is safely classified and Task 023 acceptance checks are complete.
+
+## TASK 023R ADDENDUM
+
+Task 023's original `LIVE_WARNING_CONTRACT_MISMATCH` remains the historical
+outcome. Task 023R made one separate authorized read-only request and recorded
+only its exact SHA-256 fingerprint, UTF-8 length, semantic booleans, public
+field names, and field null structure. The response did not unambiguously
+establish that the warning itself referred to the non-exchange condition, so
+Task 023R stopped with `WARNING_SEMANTICS_UNRESOLVED`. The speculative regex
+allowlist remains unchanged at the published baseline; no fingerprint was
+pinned, no database was contacted, and migration 004 remains unapplied.
