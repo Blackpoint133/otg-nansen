@@ -68,3 +68,5 @@ NULL and an observed warning-free paginated run stores `[]`. Unknown warnings
 fail closed. The documented non-exchange breakdown warning is eligible only
 for `flows` with `smart_money`, but the authorized live revalidation remained
 `UNKNOWN`; broader backfill is blocked and migration 004 remains unapplied.
+
+Task 023F adds an exact SHA-256 fingerprint policy for the previously observed warning, restricted to `flows` / `smart_money`. After normalization, every returned record must have all four optional CEX/DEX breakdown fields null before the warning is accepted. The raw wording is never stored, and any wording change becomes `UNKNOWN`. The exact fingerprint and evidence are in the Task 023F report. Migration 004 is applied to staging only; production remains unchanged. Legacy warning audit values remain NULL, while inspected warning-free runs use `[]`.

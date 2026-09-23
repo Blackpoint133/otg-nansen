@@ -101,3 +101,5 @@ The verified non-exchange breakdown warning is allowed only for flows labeled
 `smart_money`. Task 023's live revalidation was `UNKNOWN`, so migration 004
 remains unapplied, production is unchanged, and broader ingestion remains
 blocked.
+
+Task 023F accepts one exact warning fingerprint only for TGM Flows `smart_money`, and only after normalized records confirm all four CEX/DEX breakdown fields are null. Different wording and mixed unknown warnings fail closed before the data transaction. Migration 004 is applied to staging only; production remains untouched. The raw warning is never stored or logged.

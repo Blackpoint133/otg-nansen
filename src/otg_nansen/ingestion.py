@@ -13,7 +13,7 @@ from .errors import IncompleteSourceWindow, IngestionWindowError, PaginationLimi
 from .models import NormalizedDexTrade, NormalizedFlowRecord, NormalizedTokenInformation
 from .normalize import normalize_dex_trades, normalize_flows, normalize_token_information
 from .persistence import NansenRepository, canonical_request_scope, map_ingestion_run
-from .source_warnings import summarize_page_warnings, sanitized_unknown_summaries
+from .source_warnings import summarize_page_warnings, sanitized_unknown_summaries, validate_warning_structure
 
 
 def _utc(value: datetime, field: str) -> datetime:
@@ -146,6 +146,11 @@ class NansenIngestionOrchestrator:
             source_warnings = summarize_page_warnings(endpoint, scope, result.page_metadata)
             if endpoint == "flows":
                 models = normalize_flows({"data": result.records}, chain=chain, token_address=token_address, flow_label=scope)
+                try:
+                    validate_warning_structure(source_warnings, models, endpoint=endpoint)
+                except SourceWarningError as error:
+                    source_warnings = [{"page": error.page, "warning_count": error.warning_count, "categories": ["UNKNOWN"]}]
+                    raise
                 self._validate_flows(models, window)
             else:
                 models = normalize_dex_trades({"data": result.records}, chain=chain, token_address=token_address)

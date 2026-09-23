@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+import hashlib
 import json
 from pathlib import Path
 
@@ -90,13 +91,38 @@ def test_flow_success_audits_and_checkpoints_at_window_end():
     assert run["source_warnings"] == []
 
 
-def test_benign_warning_is_audited_sanitized_and_ingested():
-    source = FakeSource(pages=[flow_records()], page_metadata=[PaginationPageMetadata(1, ("CEX/DEX breakdown fields are null for non-exchange labels.",))])
+def test_benign_warning_is_audited_sanitized_and_ingested(monkeypatch):
+    import otg_nansen.source_warnings as warning_policy
+    synthetic = "synthetic verified breakdown notice"
+    monkeypatch.setattr(warning_policy, "KNOWN_FLOW_WARNING_FINGERPRINTS", {
+        hashlib.sha256(synthetic.encode("utf-8")).hexdigest(): "NON_EXCHANGE_BREAKDOWN_UNAVAILABLE"
+    })
+    source = FakeSource(pages=[flow_records()], page_metadata=[PaginationPageMetadata(1, (synthetic,))])
     instance, repository = orchestrator(source)
     result = instance.ingest_flows(chain="avalanche", token_address=TOKEN, window=WINDOW, flow_label="smart_money")
     assert repository.ingestion_runs[result.run_id]["source_warnings"] == [
         {"page": 1, "warning_count": 1, "categories": ["NON_EXCHANGE_BREAKDOWN_UNAVAILABLE"]}
     ]
+
+
+@pytest.mark.parametrize("field", ["total_inflows_cex", "total_inflows_dex", "total_outflows_cex", "total_outflows_dex"])
+def test_non_null_breakdown_warning_fails_before_data_or_checkpoint(monkeypatch, field):
+    import otg_nansen.source_warnings as warning_policy
+    synthetic = "synthetic verified breakdown notice"
+    monkeypatch.setattr(warning_policy, "KNOWN_FLOW_WARNING_FINGERPRINTS", {
+        hashlib.sha256(synthetic.encode("utf-8")).hexdigest(): "NON_EXCHANGE_BREAKDOWN_UNAVAILABLE"
+    })
+    record = deepcopy(flow_records()[0])
+    record[field] = 1
+    source = FakeSource(pages=[[record]], page_metadata=[PaginationPageMetadata(1, (synthetic,))])
+    instance, repository = orchestrator(source)
+    with pytest.raises(SourceWarningError) as error:
+        instance.ingest_flows(chain="avalanche", token_address=TOKEN, window=WINDOW, flow_label="smart_money")
+    run = next(iter(repository.ingestion_runs.values()))
+    assert run["status"] == "failed"
+    assert run["source_warnings"] == [{"page": 1, "warning_count": 1, "categories": ["UNKNOWN"]}]
+    assert repository.data["flows"] == {} and repository.checkpoints == {}
+    assert "synthetic verified breakdown notice" not in str(error.value)
 
 
 def test_unknown_warning_fails_before_rows_or_checkpoint_commit():

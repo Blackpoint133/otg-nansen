@@ -146,3 +146,5 @@ and sanitized category names. The CHECK permits only an array or NULL. The
 migration was published as an artifact but was not applied because the one
 authorized live warning classified as `UNKNOWN`. Existing staging rows and
 data remain unchanged.
+
+Task 023F applies migration 004 to staging only. The exact previously observed warning is represented in source code only by its SHA-256 fingerprint, and accepted audit data contains only sanitized page/count/category summaries. Existing pre-capture audit rows remain NULL; new inspected warning-free runs use `[]`. Raw source warning text is never durable.

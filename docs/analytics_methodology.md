@@ -44,3 +44,5 @@ documented null CEX/DEX breakdown for non-exchange labels. Warning summaries
 contain no source text or response fields. Since the authorized live warning
 revalidation classified as `UNKNOWN`, broader historical ingestion remains
 blocked pending clarification.
+
+Task 023F later adopts the exact recorded warning fingerprint, limited to Flows `smart_money` and guarded by null CEX/DEX breakdown fields on every normalized result row. The warning text is not retained, and changed wording remains unknown. This source-specific boundary does not establish other labels or broader historical coverage.

@@ -227,3 +227,5 @@ persistence. Task 023's single authorized live validation returned one warning
 that the strict classifier did not recognize. Its sanitized category was
 `UNKNOWN`; no raw warning text was retained. Broader backfill remains blocked
 pending warning-contract clarification.
+
+Task 023F resolves the warning policy using the exact SHA-256 fingerprint recorded in its report. Recognition is limited to TGM Flows with the `smart_money` label, and normalization must show all four optional CEX/DEX breakdown counts as null on every returned record. The raw warning text is never retained. Any wording change or additional unrecognized warning is `UNKNOWN` and fails closed. The one post-change validation request matched the fingerprint and the documented breakdown structure.
