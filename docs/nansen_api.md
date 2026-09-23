@@ -205,5 +205,6 @@ Because the official contract changes resolution with request-range width,
 persisted flow identity includes both `date` (bucket start) and `bucket_end`
 (exclusive end), in addition to chain, canonical token, and flow label. Null
 or non-positive bucket intervals may be normalized for diagnosis but are
-rejected before persistence. Staging migration/re-key verification is pending;
-no broader backfill is authorized by this design change.
+rejected before persistence. Migration 003 and re-key verification completed
+on staging; production was not changed. This design change does not authorize
+a broader backfill.

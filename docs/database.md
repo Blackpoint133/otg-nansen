@@ -134,5 +134,6 @@ it is not a full backfill or a claim of one record for every day.
 Task 022 changes logical flow identity to include both bucket boundaries.
 Fresh schema SQL requires non-null `bucket_end`, a positive interval, and a
 natural unique constraint over chain/token/label/date/bucket_end. Migration
-003 and staging re-keying are pending guarded execution; production remains
-out of scope.
+003 and re-keying were applied transactionally to staging after the source
+commit was published. All 52 existing rows were retained and matched the new
+key model; production remains out of scope.

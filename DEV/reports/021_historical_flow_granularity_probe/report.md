@@ -206,5 +206,18 @@ pending key/schema review.
 
 Review flow identity semantics against adaptive bucket resolution. Decide
 whether `bucket_end` or an explicit resolution dimension belongs in logical
-identity before any broader historical ingestion. Do not start Task 022 or a
-backfill automatically.
+identity before any broader historical ingestion. Do not start a backfill
+automatically.
+
+## Task 022 identity decision addendum
+
+Task 022 selected persisted logical identity as chain, canonical token,
+flow_label, UTC bucket start (`date`), and exclusive UTC bucket end
+(`bucket_end`). The opaque flow key now fingerprints both bucket bounds, while
+metrics remain excluded. `bucket_end` is still optional in the normalized
+diagnostic model, but persistence and orchestration require a positive
+interval. Staging migration 003 was published before execution and applied
+transactionally; all 52 retained rows were re-keyed with no row loss. The
+natural bucket identity constraint and interval check are active on staging.
+Production was untouched. This resolves the identity design concern but does
+not authorize historical backfill.

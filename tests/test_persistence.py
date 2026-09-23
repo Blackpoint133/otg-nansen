@@ -172,11 +172,16 @@ def test_flow_key_includes_bucket_interval_and_excludes_observation_values():
     changed = load("flows_avalanche.json")
     changed["data"][0].update({
         "price_usd": "9",
+        "token_amount": "77",
         "value_usd": "8",
         "holders_count": 99,
         "total_inflows_count": 98,
         "total_outflows_count": 97,
         "is_complete": False,
+        "total_inflows_cex": 7,
+        "total_inflows_dex": 8,
+        "total_outflows_cex": 9,
+        "total_outflows_dex": 10,
     })
     second = normalize_flows(changed, chain="avalanche", token_address=TOKEN, flow_label="smart_money")[0]
     assert map_flow(first)["flow_key"] == map_flow(second)["flow_key"]

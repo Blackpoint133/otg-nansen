@@ -27,9 +27,9 @@ response did not include the same midnight timestamp as the persisted daily
 bucket, so a same-date/different-`bucket_end` collision was not observed;
 identity collision risk was inconclusive from the probe itself. The Task 022
 design therefore uses both bucket start and exclusive bucket end in persisted
-identity, allowing distinct resolutions to coexist. Staging migration is
-pending; broader backfill remains unauthorized until that migration and its
-verification complete. Any future finite backfill must choose request window
+identity, allowing distinct resolutions to coexist. Migration 003 and the
+bucket-aware re-key were applied and verified on staging only; broader
+backfill remains unauthorized. Any future finite backfill must choose request window
 widths according to desired resolution, and analytics must retain and interpret
 the bucket interval rather than assume uniform hourly history.
 

@@ -88,5 +88,6 @@ authorization for a broad loop.
 Nansen Flows resolution is range-dependent, so persistence identity includes
 both `date` and exclusive `bucket_end`. The model may retain a null bucket end
 for diagnosis, but orchestration rejects null or non-positive intervals before
-opening the data transaction. Task 022's staging-only key migration must be
-published before execution; production remains untouched.
+opening the data transaction. Task 022 published its migration before applying
+it to staging; all retained flow rows were re-keyed without row loss. Production
+remains untouched.
