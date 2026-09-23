@@ -60,6 +60,10 @@ def execution_enabled(cli_opt_in: bool, environ: dict[str, str] | None = None) -
     return cli_opt_in and env.get("NANSEN_RUN_LIVE_BACKFILL") == "1"
 
 
+def _utc_wire(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 def validate_invocation_limits(max_units: int, max_live_calls: int) -> None:
     if not isinstance(max_units, int) or isinstance(max_units, bool) or not 1 <= max_units <= ABSOLUTE_MAX_UNITS_PER_INVOCATION:
         raise BackfillExecutionError("max_units exceeds the per-invocation limit")
@@ -366,7 +370,7 @@ def main(argv=None) -> int:
     print(f"INGESTION_RUN_ROWS_BEFORE={audit_count_before}")
     print(f"RECENT_HOURLY_ROWS_BEFORE={recent[0]}")
     print(f"RECENT_HOURLY_IDENTITIES_BEFORE={recent[1]}")
-    print(f"CHECKPOINT_BEFORE={json.dumps((_wire(checkpoint_before[0]), checkpoint_before[1]) if checkpoint_before else None)}")
+    print(f"CHECKPOINT_BEFORE={json.dumps((_utc_wire(checkpoint_before[0]), checkpoint_before[1]) if checkpoint_before else None)}")
     if before_duplicates:
         print("EXECUTION_REFUSED=GLOBAL_NATURAL_IDENTITY_DUPLICATES")
         return 2
@@ -412,7 +416,7 @@ def main(argv=None) -> int:
             or recent[0] != args.expected_recent_hourly_rows_before
             or recent[1] != args.expected_recent_hourly_rows_before
             or checkpoint_before is None
-            or _wire(checkpoint_before[0]) != args.expected_checkpoint_timestamp
+            or _utc_wire(checkpoint_before[0]) != args.expected_checkpoint_timestamp
             or checkpoint_before[1] != args.expected_checkpoint_run_id):
         print("EXECUTION_REFUSED=STAGING_SNAPSHOT_MISMATCH")
         return 2
@@ -541,7 +545,7 @@ def main(argv=None) -> int:
             print(f"PLAN_AMBIGUOUS_AFTER={final_progress.ambiguous}")
             next_index = first_pending_index(final_plan, final_progress.statuses)
             print(f"RESTART_RESUME_NEXT_UNIT={next_index if next_index is not None else 'NONE'}")
-            print(f"CHECKPOINT_AFTER={json.dumps((_wire(checkpoint_after[0]), checkpoint_after[1]) if checkpoint_after else None)}")
+            print(f"CHECKPOINT_AFTER={json.dumps((_utc_wire(checkpoint_after[0]), checkpoint_after[1]) if checkpoint_after else None)}")
             print(f"CHECKPOINT_NON_REGRESSION={checkpoint_after == checkpoint_before}")
             print(f"NEW_RUNS_WITH_WARNING_AUDIT={sum(1 for d in completed_details.values() if d['audit_valid'])}")
             print("NEW_RUNS_WITH_NULL_WARNING_AUDIT=0")

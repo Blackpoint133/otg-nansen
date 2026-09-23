@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timedelta, timezone
 
 from otg_nansen.backfill import (
     BackfillExecutionError,
@@ -13,6 +14,7 @@ from otg_nansen.backfill_execute import (
     first_pending_index,
     select_authorized_units,
     should_stop_for_resource_pressure,
+    _utc_wire,
     validate_invocation_limits,
     validate_task028_bounds,
 )
@@ -24,6 +26,11 @@ def test_backfill_runner_requires_both_explicit_opt_ins():
     assert not execution_enabled(True, {})
     assert not execution_enabled(True, {"NANSEN_RUN_LIVE_BACKFILL": "true"})
     assert execution_enabled(True, {"NANSEN_RUN_LIVE_BACKFILL": "1"})
+
+
+def test_checkpoint_timestamp_gate_compares_utc_instants():
+    local = datetime(2026, 9, 20, 16, 59, 59, tzinfo=timezone(timedelta(hours=-7)))
+    assert _utc_wire(local) == "2026-09-20T23:59:59Z"
 
 
 def _progress(plan, complete=0, pending=None, ambiguous=0):
