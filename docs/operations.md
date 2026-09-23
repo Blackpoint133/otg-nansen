@@ -76,3 +76,11 @@ duplicates), while a new successful audit became the checkpoint's referenced
 run at the same window end. Earlier failed/successful audit history was
 preserved. This narrow replay is not evidence for broader historical replay
 or source-revision reconciliation.
+
+Task 020 ran one bounded early-history pilot for 2025-04-25 through
+2025-05-24 UTC, with a two-call maximum, zero retries, and a 120-second
+timeout. The response completed in one page and persisted 29 normalized rows.
+The checkpoint remained at its later September 20 timestamp and still
+references the Task 019 success run. This is exact-window availability
+evidence only; do not infer maximum Nansen history, daily completeness, or
+authorization for a broad loop.

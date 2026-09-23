@@ -121,3 +121,12 @@ key set digest was unchanged. No duplicates were created. The checkpoint
 timestamp stayed at the requested window end and now references the successful
 replay audit; the earlier failed and successful run audits remain intact.
 This validates idempotency only for this retained window.
+
+Task 020 validated a separate 30-day early-history pilot
+(2025-04-25T00:00:00Z through 2025-05-24T23:59:59Z). Nansen returned 29
+complete flow records on one final page; staging contains 29 unique rows on
+29 distinct dates, all within the requested interval. The September 20
+high-water checkpoint did not regress and remains associated with the Task
+019 replay run. The existing September rows and prior audit history remain
+intact. This proves non-empty availability only for the exact pilot window;
+it is not a full backfill or a claim of one record for every day.

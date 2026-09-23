@@ -168,6 +168,13 @@ with no duplicate keys. This demonstrates live idempotency for this one
 retained window only. It does not establish broad historical idempotency or
 revision reconciliation behavior.
 
+Task 020 verified non-empty Nansen flow history for the exact bounded window
+2025-04-25T00:00:00Z through 2025-05-24T23:59:59Z: 29 normalized records
+were returned on one final page and persisted. They span 29 distinct dates;
+this does not claim a record for every day or establish maximum historical
+depth. The later September checkpoint was not regressed. No broader backfill
+was performed.
+
 ## Not verified
 
 The account plan, exact credit balance, endpoint-specific maximum historical
