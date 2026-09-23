@@ -126,3 +126,15 @@ normalization failed at `flows.data[2].total_inflows_count` because the field
 was a finite fractional JSON float. No live value was recorded. The normalizer
 was not changed because rounding or truncation would not preserve the source
 value exactly. Complete-window acceptance remains open.
+
+## TASK 017V ADDENDUM
+
+After Task 017M changed both total count fields to Decimal, Task 017V fetched
+the same bounded window in three no-retry pages and reached the final page.
+All 23 records normalized. All dates were in the requested window and
+non-decreasing; all records had `is_complete=true`, with no null or false
+values. All bucket-end timestamps were present and timezone-valid. Fractional
+inflow counts occurred and remained Decimal; outflow counts in this window
+were integral. Duplicate timestamps: zero. No live values or raw rows were
+retained, and no data was persisted. The previous complete-window validation
+gap is closed for this exact window only.

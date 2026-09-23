@@ -147,5 +147,15 @@ claimed.
 
 ## NEXT_RECOMMENDED_TASK
 
-Authorize a bounded live revalidation of the same complete window using the
-Decimal model. Do not start Task 018 before that validation and review.
+The same bounded window was subsequently live-revalidated successfully in
+Task 017V using the Decimal model. Review this one-window evidence before
+planning broader date or label coverage. Do not start Task 018 without its
+separate authorization.
+
+## TASK 017V ADDENDUM
+
+Task 017V reached the final page in three no-retry requests, normalized all 23
+records, observed a fractional inflow count preserved as Decimal, verified all
+records were in-window and complete, and verified non-decreasing dates and
+UTC bucket timestamps. This validates the Decimal model for that exact
+bounded window only. No data was persisted.

@@ -139,6 +139,16 @@ only been live-observed as null for the tested Smart Money label. Task 017M
 made no live API calls, so complete-window normalization still requires a
 separately authorized live revalidation.
 
+Task 017V completed that revalidation for exactly the 2026-09-20 Avalanche
+`smart_money` window. Three pages reached the final page, all collected rows
+normalized with Decimal total count metrics, all observed buckets were marked
+complete, and dates were non-decreasing and within the requested bounds. A
+fractional inflow count was observed and preserved as Decimal; outflow count
+values in this window were integral. Optional CEX/DEX breakdowns were null.
+No live data was persisted. This proves behavior only for this one window; it
+does not establish broader history, other dates or labels, Solana complete
+windows, production ingestion, or backfill behavior.
+
 ## Not verified
 
 The account plan, exact credit balance, endpoint-specific maximum historical
