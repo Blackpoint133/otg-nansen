@@ -91,6 +91,7 @@ def test_flow_success_audits_and_checkpoints_at_window_end():
 def test_flow_multi_page_and_retry_attempt_accounting():
     second = deepcopy(flow_records()[0])
     second["date"] = "2026-09-20T13:00:00Z"
+    second["bucket_end"] = "2026-09-20T13:59:59Z"
     source = FakeSource(pages=[flow_records(), [second]], attempts=1)
     orchestrator_instance, repository = orchestrator(source)
     result = orchestrator_instance.ingest_flows(chain="avalanche", token_address=TOKEN, window=WINDOW, flow_label="smart_money")
@@ -122,6 +123,9 @@ def test_empty_complete_windows_succeed_for_flows_and_trades():
     (lambda record: record.update(is_complete=False), IncompleteSourceWindow),
     (lambda record: record.update(is_complete=None), IncompleteSourceWindow),
     (lambda record: record.update(date="2026-09-21T00:00:01Z"), IngestionWindowError),
+    (lambda record: record.update(bucket_end=None), IngestionWindowError),
+    (lambda record: record.update(bucket_end=record["date"]), IngestionWindowError),
+    (lambda record: record.update(bucket_end="2026-09-20T11:00:00Z"), IngestionWindowError),
 ])
 def test_flow_completeness_and_window_fail_without_data_or_checkpoint(mutator, error_type):
     record = deepcopy(flow_records()[0])

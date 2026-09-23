@@ -36,14 +36,17 @@ driver-backed repository must use parameter binding and preserve the raw-to-
 normalized boundary.
 
 Persistence identity is scope-aware: flow labels are part of request and
-checkpoint provenance, while flow keys exclude mutable measurements. DEX trade
+checkpoint provenance. A flow key identifies one exact bucket by chain,
+canonical token, label, UTC `date`, and exclusive UTC `bucket_end`; mutable
+measurements are excluded. DEX trade
 keys exclude mutable labels and USD estimates while retaining transaction and
 swap identity. Repository lifecycle methods are designed around one
 transaction per ingestion run.
 The final proposed lifecycle instead uses a durable audit start, one atomic
 data/checkpoint transaction, and a durable audit success or failure update.
-Migration status is applied to staging only and NOT APPLIED to production. Flow scope is mandatory and flow identity is
-chain, token, scope, and date; DEX trade identity excludes mutable enrichment.
+Migration status is applied to staging only and NOT APPLIED to production.
+Flow scope and positive bucket interval are mandatory for persistence, and
+flow identity includes both bucket bounds; DEX trade identity excludes mutable enrichment.
 Persistence identity canonicalizes Avalanche EVM addresses to lowercase while
 preserving exact Solana and unknown-chain values. Flow scope is trimmed once
 at normalization and reused by all persistence mappings.

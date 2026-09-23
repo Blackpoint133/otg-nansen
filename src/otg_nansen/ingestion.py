@@ -196,6 +196,8 @@ class NansenIngestionOrchestrator:
         for model in models:
             if not (window.start <= model.date <= window.end):
                 raise IngestionWindowError("flow record is outside requested window")
+            if model.bucket_end is None or model.bucket_end <= model.date:
+                raise IngestionWindowError("flow bucket interval must have a positive bucket_end")
             if model.is_complete is not True:
                 raise IncompleteSourceWindow("flow window contains an incomplete record")
 

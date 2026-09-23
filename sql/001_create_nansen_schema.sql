@@ -35,12 +35,15 @@ CREATE TABLE nansen.flows (
     total_inflows_count NUMERIC NOT NULL,
     total_outflows_count NUMERIC NOT NULL,
     flow_label TEXT NOT NULL,
-    bucket_end TIMESTAMPTZ,
+    bucket_end TIMESTAMPTZ NOT NULL,
     is_complete BOOLEAN,
     total_inflows_cex BIGINT,
     total_inflows_dex BIGINT,
     total_outflows_cex BIGINT,
     total_outflows_dex BIGINT,
+    CONSTRAINT nansen_flows_bucket_interval_check CHECK (bucket_end > date),
+    CONSTRAINT nansen_flows_natural_bucket_identity_unique UNIQUE
+        (chain, token_address, flow_label, date, bucket_end),
     CHECK (flow_label = btrim(flow_label) AND btrim(flow_label) <> '')
 );
 

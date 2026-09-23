@@ -84,3 +84,9 @@ The checkpoint remained at its later September 20 timestamp and still
 references the Task 019 success run. This is exact-window availability
 evidence only; do not infer maximum Nansen history, daily completeness, or
 authorization for a broad loop.
+
+Nansen Flows resolution is range-dependent, so persistence identity includes
+both `date` and exclusive `bucket_end`. The model may retain a null bucket end
+for diagnosis, but orchestration rejects null or non-positive intervals before
+opening the data transaction. Task 022's staging-only key migration must be
+published before execution; production remains untouched.

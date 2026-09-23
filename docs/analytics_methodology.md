@@ -25,11 +25,13 @@ the tested days. The wide query omitted one calendar date that returned
 records under a direct one-day query. For the represented day, the narrow
 response did not include the same midnight timestamp as the persisted daily
 bucket, so a same-date/different-`bucket_end` collision was not observed;
-identity collision risk remains inconclusive. Because the current flow key
-does not include bucket bounds, broader backfill is unsafe pending explicit
-identity-resolution review. Any future finite backfill must choose request
-window widths according to desired resolution and be tested against bucket
-identity, not assume uniform hourly history.
+identity collision risk was inconclusive from the probe itself. The Task 022
+design therefore uses both bucket start and exclusive bucket end in persisted
+identity, allowing distinct resolutions to coexist. Staging migration is
+pending; broader backfill remains unauthorized until that migration and its
+verification complete. Any future finite backfill must choose request window
+widths according to desired resolution, and analytics must retain and interpret
+the bucket interval rather than assume uniform hourly history.
 
 Chain, timezone, missing-date, bucket-resolution, and sample-size diagnostics
 must be retained with every future analysis. Align only observations whose

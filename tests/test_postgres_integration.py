@@ -216,6 +216,41 @@ def test_staging_repository_lifecycle_and_constraints():
 
 
 @pytest.mark.skipif(os.getenv("NANSEN_RUN_POSTGRES_TESTS") != "1", reason="staging PostgreSQL tests are opt-in")
+def test_bucket_aware_identity_allows_multiple_resolutions_and_replay():
+    repo = PostgresRepository.from_env()
+    token = "0x0000000000000000000000000000000000000222"
+    label = "task022_resolution_fixture"
+    base = normalize_flows(_load("flows_avalanche.json"), chain="avalanche", token_address=token, flow_label=label)[0]
+    hourly = replace(base, bucket_end=base.date.replace(minute=0, second=0, microsecond=0).replace(hour=13))
+    daily = replace(base, bucket_end=base.date.replace(hour=0, minute=0, second=0, microsecond=0).replace(day=21))
+
+    def cleanup():
+        with repo.audit_connection.transaction():
+            repo.audit_connection.execute(
+                "DELETE FROM nansen.flows WHERE chain = %s AND token_address = %s AND flow_label = %s",
+                ("avalanche", token.lower(), label),
+            )
+
+    try:
+        cleanup()
+        for model in (hourly, daily, hourly, daily):
+            repo.begin_data_transaction()
+            repo.store_flows([model])
+            repo.commit_data_transaction()
+        rows = repo.audit_connection.execute(
+            "SELECT count(*), count(DISTINCT flow_key), count(DISTINCT (chain, token_address, flow_label, date, bucket_end)) "
+            "FROM nansen.flows WHERE chain = %s AND token_address = %s AND flow_label = %s",
+            ("avalanche", token.lower(), label),
+        ).fetchone()
+        assert tuple(rows) == (2, 2, 2)
+    finally:
+        repo.rollback_data_transaction()
+        cleanup()
+        assert _count(repo, "flows", "token_address = %s AND flow_label = %s", (token.lower(), label)) == 0
+        repo.close()
+
+
+@pytest.mark.skipif(os.getenv("NANSEN_RUN_POSTGRES_TESTS") != "1", reason="staging PostgreSQL tests are opt-in")
 def test_staging_flow_decimal_counts_round_trip_exactly():
     repo = PostgresRepository.from_env()
     label = "task017m_numeric_roundtrip"

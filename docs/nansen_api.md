@@ -200,3 +200,10 @@ collision risk remains inconclusive because the tested narrow page had no
 midnight record. Broader backfill remains unsafe until bucket identity is
 resolved. A read-only check confirmed Task 020's 29 rows, the recent 23 rows,
 and the September checkpoint were unchanged by these probes.
+
+Because the official contract changes resolution with request-range width,
+persisted flow identity includes both `date` (bucket start) and `bucket_end`
+(exclusive end), in addition to chain, canonical token, and flow label. Null
+or non-positive bucket intervals may be normalized for diagnosis but are
+rejected before persistence. Staging migration/re-key verification is pending;
+no broader backfill is authorized by this design change.

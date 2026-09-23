@@ -1,6 +1,6 @@
 """Tests for review-only persistence mappings and checkpoint rules."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from dataclasses import replace
 from pathlib import Path
@@ -29,7 +29,9 @@ from otg_nansen.persistence import (
     map_dex_trade,
     map_flow,
     map_token_information,
+    flow_identity_key,
 )
+from otg_nansen.flow_identity_migration import plan_flow_key_migration
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "nansen"
@@ -58,6 +60,57 @@ def test_model_mappings_preserve_decimal_and_utc_datetime():
     assert "apikey" not in token_payload and "password" not in token_payload
     assert "apikey" not in flow_payload and "password" not in flow_payload
     assert "apikey" not in trade_payload and "password" not in trade_payload
+
+
+def test_flow_identity_includes_bucket_interval_but_excludes_metrics():
+    flow = normalize_flows(load("flows_avalanche.json"), chain="avalanche", token_address=TOKEN, flow_label="smart_money")[0]
+    key = map_flow(flow)["flow_key"]
+    assert key == flow_identity_key("avalanche", TOKEN.upper().replace("0X", "0x"), " smart_money ", flow.date, flow.bucket_end)
+    assert map_flow(replace(flow, value_usd=flow.value_usd + 99))["flow_key"] == key
+    assert map_flow(replace(flow, bucket_end=flow.bucket_end.replace(hour=14)))["flow_key"] != key
+    assert map_flow(replace(flow, date=flow.date.replace(hour=14), bucket_end=flow.bucket_end.replace(hour=15)))["flow_key"] != key
+    assert map_flow(replace(flow, flow_label="exchange"))["flow_key"] != key
+    with pytest.raises(PersistenceDesignError, match="bucket_end"):
+        map_flow(replace(flow, bucket_end=None))
+    for end in (flow.date, flow.date.replace(hour=flow.date.hour - 1)):
+        with pytest.raises(PersistenceDesignError, match="after date"):
+            map_flow(replace(flow, bucket_end=end))
+
+
+def test_in_memory_repository_keeps_two_resolutions_at_same_start():
+    flow = normalize_flows(load("flows_avalanche.json"), chain="avalanche", token_address=TOKEN, flow_label="smart_money")[0]
+    daily = replace(flow, bucket_end=flow.date + timedelta(days=1))
+    hourly = replace(flow, bucket_end=flow.date + timedelta(hours=1))
+    repository = InMemoryTransactionRepository()
+    repository.begin_data_transaction()
+    repository.store_flows([daily, hourly, daily, hourly])
+    repository.commit_data_transaction()
+    assert len(repository.data["flows"]) == 2
+
+
+def test_bucket_identity_migration_plans_complete_collision_safe_remap():
+    flow = normalize_flows(load("flows_avalanche.json"), chain="avalanche", token_address=TOKEN, flow_label="smart_money")[0]
+    row = {"flow_key": "old-key", "chain": flow.chain, "token_address": flow.token_address,
+           "flow_label": flow.flow_label, "date": flow.date, "bucket_end": flow.bucket_end}
+    plan = plan_flow_key_migration([row], temporary_namespace="test-namespace")
+    assert plan.old_to_new[0][0] == "old-key"
+    assert plan.old_to_new[0][1] == map_flow(flow)["flow_key"]
+    assert plan.temporary_keys[0] not in {"old-key", plan.old_to_new[0][1]}
+    assert plan.cross_collisions == 0
+
+
+def test_bucket_identity_migration_rejects_old_to_new_cross_collision():
+    flow = normalize_flows(load("flows_avalanche.json"), chain="avalanche", token_address=TOKEN, flow_label="smart_money")[0]
+    new_key = map_flow(flow)["flow_key"]
+    rows = [
+        {"flow_key": "legacy-a", "chain": flow.chain, "token_address": flow.token_address,
+         "flow_label": flow.flow_label, "date": flow.date, "bucket_end": flow.bucket_end},
+        {"flow_key": new_key, "chain": flow.chain, "token_address": flow.token_address,
+         "flow_label": flow.flow_label, "date": flow.date.replace(hour=13),
+         "bucket_end": flow.bucket_end.replace(hour=14)},
+    ]
+    with pytest.raises(PersistenceDesignError, match="cross-collide"):
+        plan_flow_key_migration(rows)
 
 
 def test_success_sql_persists_all_audit_counters():
@@ -113,12 +166,11 @@ def test_solana_case_variants_remain_distinct_persistence_identity():
     assert checkpoint_stream_key("solana", "flows", "SolToken", "smart_money") != checkpoint_stream_key("solana", "flows", "soltoken", "smart_money")
 
 
-def test_flow_key_excludes_bucket_and_observation_values():
+def test_flow_key_includes_bucket_interval_and_excludes_observation_values():
     response = load("flows_avalanche.json")
     first = normalize_flows(response, chain="avalanche", token_address=TOKEN, flow_label="smart_money")[0]
     changed = load("flows_avalanche.json")
     changed["data"][0].update({
-        "bucket_end": "2026-09-21T00:00:00Z",
         "price_usd": "9",
         "value_usd": "8",
         "holders_count": 99,
@@ -128,6 +180,9 @@ def test_flow_key_excludes_bucket_and_observation_values():
     })
     second = normalize_flows(changed, chain="avalanche", token_address=TOKEN, flow_label="smart_money")[0]
     assert map_flow(first)["flow_key"] == map_flow(second)["flow_key"]
+    changed["data"][0]["bucket_end"] = "2026-09-21T00:00:00Z"
+    different_bucket = normalize_flows(changed, chain="avalanche", token_address=TOKEN, flow_label="smart_money")[0]
+    assert map_flow(first)["flow_key"] != map_flow(different_bucket)["flow_key"]
 
 
 def test_flow_count_decimal_does_not_change_identity_and_precision_is_mapped():
@@ -288,6 +343,20 @@ def test_migration_is_reviewable_but_not_executed():
     flows_table = text.split("CREATE TABLE nansen.flows (", 1)[1].split("\n);", 1)[0]
     assert "total_inflows_count NUMERIC NOT NULL" in flows_table
     assert "total_outflows_count NUMERIC NOT NULL" in flows_table
+
+
+def test_bucket_identity_schema_and_migration_are_narrow_and_reviewable():
+    root = Path(__file__).parents[1]
+    fresh = (root / "sql" / "001_create_nansen_schema.sql").read_text(encoding="utf-8")
+    flows = fresh.split("CREATE TABLE nansen.flows (")[1].split("\n);", 1)[0]
+    assert "bucket_end TIMESTAMPTZ NOT NULL" in flows
+    assert "CHECK (bucket_end > date)" in flows
+    assert "UNIQUE\n        (chain, token_address, flow_label, date, bucket_end)" in flows
+    migration = (root / "sql" / "003_flow_bucket_identity.sql").read_text(encoding="utf-8").upper()
+    assert "DROP TABLE" not in migration and "DELETE" not in migration and "TRUNCATE" not in migration
+    assert "ALTER COLUMN BUCKET_END SET NOT NULL" in migration
+    assert "CHECK (BUCKET_END > DATE)" in migration
+    assert "UNIQUE (CHAIN, TOKEN_ADDRESS, FLOW_LABEL, DATE, BUCKET_END)" in " ".join(migration.split())
 
 
 def test_flow_count_numeric_migration_changes_only_two_columns_without_drop():

@@ -148,6 +148,31 @@ def canonical_request_scope(endpoint: str, flow_label: Optional[str] = None) -> 
     return ""
 
 
+def flow_identity_key(
+    chain: str,
+    token_address: str,
+    flow_label: str,
+    date: datetime,
+    bucket_end: datetime,
+) -> str:
+    """Build stable identity for one exact Nansen aggregation bucket."""
+    start = _utc(date, "date")
+    end = _utc(bucket_end, "bucket_end")
+    if end <= start:
+        raise PersistenceDesignError("bucket_end must be after date")
+    try:
+        scope = canonical_flow_scope(flow_label)
+    except ValueError as exc:
+        raise PersistenceDesignError("flows requires a non-empty flow_label scope") from exc
+    return _fingerprint({
+        "chain": chain,
+        "token_address": _canonical_address(chain, token_address),
+        "flow_label": scope,
+        "date": start,
+        "bucket_end": end,
+    })
+
+
 def _canonical_address(chain: str, address: str) -> str:
     try:
         return canonical_chain_address(chain, address)
@@ -184,17 +209,23 @@ def map_token_information(model: NormalizedTokenInformation, retrieved_at: datet
 
 
 def map_flow(model: NormalizedFlowRecord) -> dict[str, Any]:
+    date = _utc(model.date, "date")
+    if model.bucket_end is None:
+        raise PersistenceDesignError("flow bucket_end is required for persistence")
+    bucket_end = _utc(model.bucket_end, "bucket_end")
+    if bucket_end <= date:
+        raise PersistenceDesignError("bucket_end must be after date")
     payload = {
         "chain": model.chain,
         "token_address": _canonical_address(model.chain, model.token_address),
-        "date": _utc(model.date, "date"),
+        "date": date,
         "price_usd": model.price_usd,
         "token_amount": model.token_amount,
         "value_usd": model.value_usd,
         "holders_count": model.holders_count,
         "total_inflows_count": model.total_inflows_count,
         "total_outflows_count": model.total_outflows_count,
-        "bucket_end": _utc(model.bucket_end, "bucket_end") if model.bucket_end else None,
+        "bucket_end": bucket_end,
         "is_complete": model.is_complete,
         "total_inflows_cex": model.total_inflows_cex,
         "total_inflows_dex": model.total_inflows_dex,
@@ -202,12 +233,9 @@ def map_flow(model: NormalizedFlowRecord) -> dict[str, Any]:
         "total_outflows_dex": model.total_outflows_dex,
         "flow_label": canonical_flow_scope(model.flow_label),
     }
-    payload["flow_key"] = _fingerprint({
-        "chain": model.chain,
-        "token_address": _canonical_address(model.chain, model.token_address),
-        "flow_label": canonical_flow_scope(model.flow_label),
-        "date": model.date,
-    })
+    payload["flow_key"] = flow_identity_key(
+        model.chain, model.token_address, model.flow_label, date, bucket_end,
+    )
     return payload
 
 
