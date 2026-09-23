@@ -107,3 +107,10 @@ target window has zero flow rows and no checkpoint. No live flow data was
 persisted. This attempt provides no new NUMERIC round-trip evidence; prior
 synthetic NUMERIC validation remains the database precision evidence.
 Production remains untouched.
+
+Task 018R separately succeeded for that same single-day stream: 23 complete
+flow rows are retained in staging, and the successful audit run's checkpoint
+references the exact requested window end. Two inflow rows retain fractional
+NUMERIC values; no outflow rows were fractional. This is one bounded window,
+not broader historical coverage. The original failed Task 018 audit remains
+alongside the successful retry audit. Production remains untouched.

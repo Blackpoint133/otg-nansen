@@ -143,3 +143,12 @@ retained.
 Review the sanitized timeout and staging audit evidence, then request a
 separately bounded retry task if appropriate. Do not expand the window or
 request budget without authorization.
+
+## TASK_018R_ADDENDUM
+
+The original Task 018 run above remains failed on its first request under the
+20-second timeout. Task 018R was a separate, explicitly authorized retry; it
+completed successfully with a 60-second request timeout and retained the
+validated flow rows and matching checkpoint in staging. See
+`DEV/reports/018r_first_live_staging_flow_retry/report.md` for the retry's
+independent evidence. The original failed audit was preserved.

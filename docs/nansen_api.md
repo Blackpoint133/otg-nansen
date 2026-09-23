@@ -154,6 +154,14 @@ bounded stream/window. Its only API request timed out before a page was
 returned. The audit records failure, and no rows or checkpoint were committed.
 This was not a successful live ingestion and adds no new source-data evidence.
 
+Task 018R separately completed ingestion of the exact bounded
+2026-09-20 Avalanche `$GUN` `smart_money` flow window into staging. Three
+pages were fetched and 23 records normalized and persisted; two stored inflow
+count values remain fractional NUMERIC values. The successful audit and
+checkpoint were verified together, while the original Task 018 failed audit
+was retained. This is evidence for this single window only, not a general
+historical-coverage claim.
+
 ## Not verified
 
 The account plan, exact credit balance, endpoint-specific maximum historical

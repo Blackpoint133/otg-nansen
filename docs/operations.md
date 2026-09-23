@@ -61,3 +61,11 @@ first attempt. The durable run was marked failed, and independent staging
 verification found no flow rows or checkpoint for the target window. No retry
 or persistence followed. The failed audit is intentionally retained; another
 live attempt requires separate authorization.
+
+Task 018R was subsequently authorized as a separate single-run retry. With a
+60-second timeout, zero retries, and a three-call cap, the existing
+orchestrator completed the exact same window using three requests. Staging
+validation found 23 unique complete in-window flow rows, a successful audit,
+and the checkpoint referencing that run and window end. The first failed
+Task 018 audit remains preserved. This does not authorize another window,
+endpoint, chain, or historical backfill.
