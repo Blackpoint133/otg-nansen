@@ -135,13 +135,12 @@ All repository-authored content is English only. `CYRILLIC_SCAN=PASS`.
 
 ## RISKS
 
-The exact live page was not retained for a post-edit same-object rerun. The
-repair is narrowly supported by the one sanitized live type diagnostic and
-fixture regression coverage. Complete multi-page flow ingestion remains
-unverified.
+Task 016V closed the same-object live revalidation gap. Complete multi-page
+flow ingestion remains unverified because Task 017 found a later-record count
+contract mismatch.
 
 ## NEXT_RECOMMENDED_TASK
 
-Obtain separate authorization for a small live recheck or proceed only after
-review of this repair. Do not begin real ingestion or Task 017 from this
-report alone.
+Review the Task 017 later-record count mismatch and apply a separately
+reviewed narrow repair if justified. Task 017 is the bounded complete-window
+verification. Do not begin real ingestion or Task 018.

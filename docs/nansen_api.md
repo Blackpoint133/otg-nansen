@@ -122,6 +122,12 @@ Task 016 evidence classification:
 - FIXTURE VERIFIED: the sanitized flow fixture reproduces those field types
   and the repaired normalizer converts only exact integral count values.
 
+Task 017 attempted the first bounded multi-page validation for the same
+historical day. The paginator reached a final page after three no-retry
+requests, but normalization of the complete collected set failed on a later
+record at `total_inflows_count`. Complete-window ingestion therefore remains
+NOT VERIFIED, and no live data was persisted.
+
 ## Not verified
 
 The account plan, exact credit balance, endpoint-specific maximum historical
