@@ -181,3 +181,22 @@ The account plan, exact credit balance, endpoint-specific maximum historical
 depth, token OHLCV request schema, Smart Money historical results for `$GUN`,
 and Nansen coverage of the native GUNZ chain were not verified. No backfill or
 large pagination was attempted.
+
+Task 021 rechecked the current official Flows contract and made two direct,
+read-only live probes. Nansen documents hourly snapshots for requested ranges
+of seven days or less and daily snapshots for longer ranges. It defines `date`
+as an inclusive bucket start, `bucket_end` as exclusive, and `is_complete` as
+request-window coverage rather than finality. The same represented calendar
+day returned 23 one-hour observations in its one-day probe versus one daily
+bucket in the retained 30-day result; their timestamp sets differed. A
+calendar date absent from the wider result returned 23 hourly observations
+when queried alone. Both responses included one warning; its text was not
+retained, and no range/truncation classification was inferred from it. See
+the [official Flows documentation](https://docs.nansen.ai/api/token-god-mode/flows).
+
+The observed granularity is range-dependent. A same-date/different-bucket-end
+collision was not observed in the represented-day comparison, but identity
+collision risk remains inconclusive because the tested narrow page had no
+midnight record. Broader backfill remains unsafe until bucket identity is
+resolved. A read-only check confirmed Task 020's 29 rows, the recent 23 rows,
+and the September checkpoint were unchanged by these probes.

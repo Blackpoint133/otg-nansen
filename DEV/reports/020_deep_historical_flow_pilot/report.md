@@ -170,3 +170,13 @@ monitored if future work becomes larger.
 Review this bounded pilot and its checkpoint behavior before authorizing any
 additional finite window. Do not start a broad historical loop or Task 021
 automatically.
+
+## TASK_021_TIMESTAMP_RECONCILIATION_ADDENDUM
+
+A later read-only inspection found that the earlier `EARLIEST_PERSISTED_DATE`
+entry above incorrectly interpreted a PostgreSQL session-local timestamp as
+UTC. Converting the stored `2025-04-25 17:00:00-07:00` instant correctly
+gives `2025-04-26T00:00:00Z`. The 29 persisted UTC dates are therefore
+2025-04-26 through 2025-05-24, and 2025-04-25 is absent from the 30-day
+calendar set. Task 021 directly queried 2025-04-25 and received normalized
+hourly records. The Task 020 execution and retained rows were not changed.
