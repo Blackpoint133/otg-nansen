@@ -49,6 +49,9 @@ def test_model_mappings_preserve_decimal_and_utc_datetime():
     trade_payload = map_dex_trade(trade)
     assert isinstance(token_payload["market_cap_usd"], Decimal)
     assert isinstance(flow_payload["value_usd"], Decimal)
+    assert flow_payload["total_inflows_count"] is flow.total_inflows_count
+    assert flow_payload["total_outflows_count"] is flow.total_outflows_count
+    assert flow_payload["total_inflows_count"] == Decimal("1.125")
     assert isinstance(trade_payload["estimated_value_usd"], Decimal)
     assert flow_payload["date"].tzinfo is not None
     assert trade_payload["block_timestamp"].utcoffset().total_seconds() == 0
@@ -125,6 +128,15 @@ def test_flow_key_excludes_bucket_and_observation_values():
     })
     second = normalize_flows(changed, chain="avalanche", token_address=TOKEN, flow_label="smart_money")[0]
     assert map_flow(first)["flow_key"] == map_flow(second)["flow_key"]
+
+
+def test_flow_count_decimal_does_not_change_identity_and_precision_is_mapped():
+    base = normalize_flows(load("flows_avalanche.json"), chain="avalanche", token_address=TOKEN, flow_label="smart_money")[0]
+    response = load("flows_avalanche.json")
+    response["data"][0]["total_inflows_count"] = 2.875
+    changed = normalize_flows(response, chain="avalanche", token_address=TOKEN, flow_label="smart_money")[0]
+    assert map_flow(base)["flow_key"] == map_flow(changed)["flow_key"]
+    assert map_flow(changed)["total_inflows_count"] == Decimal("2.875")
 
 
 def test_equivalent_decimal_identity_values_are_canonical():
@@ -273,6 +285,21 @@ def test_migration_is_reviewable_but_not_executed():
     assert "endpoint = 'flows'" in text
     assert "request_scope->>'token_address' = token_address" in text
     assert "FOREIGN KEY (last_success_run_id, chain, endpoint, token_address, flow_label)" in text
+    flows_table = text.split("CREATE TABLE nansen.flows (", 1)[1].split("\n);", 1)[0]
+    assert "total_inflows_count NUMERIC NOT NULL" in flows_table
+    assert "total_outflows_count NUMERIC NOT NULL" in flows_table
+
+
+def test_flow_count_numeric_migration_changes_only_two_columns_without_drop():
+    migration = Path(__file__).parents[1] / "sql" / "002_flow_counts_numeric.sql"
+    text = migration.read_text(encoding="utf-8").upper()
+    assert "DROP" not in text
+    assert "ALTER TABLE NANSEN.FLOWS" in text
+    assert text.count("ALTER COLUMN") == 2
+    assert "ALTER COLUMN TOTAL_INFLOWS_COUNT TYPE NUMERIC" in text
+    assert "USING TOTAL_INFLOWS_COUNT::NUMERIC" in text
+    assert "ALTER COLUMN TOTAL_OUTFLOWS_COUNT TYPE NUMERIC" in text
+    assert "USING TOTAL_OUTFLOWS_COUNT::NUMERIC" in text
 
 
 def test_parameterized_sql_contains_required_semantics():

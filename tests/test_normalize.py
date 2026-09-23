@@ -59,8 +59,11 @@ def test_flows_normalize_and_convert_to_utc():
     assert isinstance(model, NormalizedFlowRecord)
     assert model.date.tzinfo is timezone.utc
     assert model.price_usd == Decimal("0.01")
-    assert model.total_inflows_count == 7
-    assert model.total_outflows_count == 4
+    assert model.total_inflows_count == Decimal("1.125")
+    assert model.total_outflows_count == Decimal("4.0")
+    assert isinstance(model.total_inflows_count, Decimal)
+    assert model.to_dict()["total_inflows_count"] == "1.125"
+    assert model.to_dict()["total_outflows_count"] == "4.0"
     assert model.to_dict()["date"] == "2026-09-20T12:00:00Z"
 
 
@@ -97,17 +100,22 @@ def test_flows_reject_invalid_numeric_values(field, value):
 
 
 @pytest.mark.parametrize("field", ["total_inflows_count", "total_outflows_count"])
-@pytest.mark.parametrize("value", [0.0, 1.0, 100.0])
-def test_flow_count_accepts_finite_integral_float(field, value):
+@pytest.mark.parametrize("value,expected", [
+    (0, "0"), (1, "1"), (1.0, "1.0"), (1.25, "1.25"),
+    (-1, "-1"), (-1.0, "-1.0"), (-1.25, "-1.25"),
+])
+def test_flow_counts_preserve_json_numbers_as_decimal(field, value, expected):
     response = load("flows_avalanche.json")
     response["data"][0][field] = value
     model = normalize_flows(response, chain="avalanche", token_address=TOKEN_ADDRESS, flow_label="smart_money")[0]
-    assert getattr(model, field) == int(value)
+    assert isinstance(getattr(model, field), Decimal)
+    assert getattr(model, field) == Decimal(expected)
+    assert model.to_dict()[field] == expected
 
 
 @pytest.mark.parametrize("field", ["total_inflows_count", "total_outflows_count"])
-@pytest.mark.parametrize("value", [1.5, -1.0, float("nan"), float("inf"), True])
-def test_flow_count_rejects_fractional_nonfinite_negative_or_boolean(field, value):
+@pytest.mark.parametrize("value", [True, False, None, "1.25", float("nan"), float("inf"), float("-inf"), {}, []])
+def test_flow_counts_reject_non_json_number_forms(field, value):
     response = load("flows_avalanche.json")
     response["data"][0][field] = value
     with pytest.raises(NormalizationError, match=field):

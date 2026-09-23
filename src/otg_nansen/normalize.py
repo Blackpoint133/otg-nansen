@@ -47,6 +47,20 @@ def _decimal(record: Mapping[str, Any], field: str, context: str, required: bool
     return result
 
 
+def _json_number_decimal(record: Mapping[str, Any], field: str, context: str) -> Decimal:
+    """Convert a required JSON number to Decimal without accepting numeric strings."""
+    value = record.get(field)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise NormalizationError(f"{context}.{field}: expected finite JSON number")
+    try:
+        result = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise NormalizationError(f"{context}.{field}: invalid JSON number") from exc
+    if not result.is_finite():
+        raise NormalizationError(f"{context}.{field}: JSON number must be finite")
+    return result
+
+
 def _integer(record: Mapping[str, Any], field: str, context: str, required: bool = True) -> Optional[int]:
     value = record.get(field)
     if value is None and not required:
@@ -54,21 +68,6 @@ def _integer(record: Mapping[str, Any], field: str, context: str, required: bool
     if isinstance(value, bool) or not isinstance(value, int):
         raise NormalizationError(f"{context}.{field}: expected integer")
     return value
-
-
-def _integer_like(record: Mapping[str, Any], field: str, context: str, required: bool = True) -> Optional[int]:
-    """Accept exact JSON integral numbers for count fields without loosening other integers."""
-    value = record.get(field)
-    if value is None and not required:
-        return None
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise NormalizationError(f"{context}.{field}: expected finite non-negative integer")
-    if isinstance(value, float):
-        if not value == value or value in (float("inf"), float("-inf")) or not value.is_integer():
-            raise NormalizationError(f"{context}.{field}: expected finite non-negative integer")
-    if value < 0:
-        raise NormalizationError(f"{context}.{field}: expected finite non-negative integer")
-    return int(value)
 
 
 def _boolean(record: Mapping[str, Any], field: str, context: str) -> Optional[bool]:
@@ -166,8 +165,8 @@ def _normalize_flow(
         token_amount=_decimal(item, "token_amount", context),
         value_usd=_decimal(item, "value_usd", context),
         holders_count=_integer(item, "holders_count", context),
-        total_inflows_count=_integer_like(item, "total_inflows_count", context),
-        total_outflows_count=_integer_like(item, "total_outflows_count", context),
+        total_inflows_count=_json_number_decimal(item, "total_inflows_count", context),
+        total_outflows_count=_json_number_decimal(item, "total_outflows_count", context),
         flow_label=flow_label,
         bucket_end=_timestamp(item, "bucket_end", context, False),
         is_complete=_boolean(item, "is_complete", context),

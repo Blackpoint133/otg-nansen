@@ -56,8 +56,8 @@ class NormalizedFlowRecord:
     token_amount: Decimal
     value_usd: Decimal
     holders_count: int
-    total_inflows_count: int
-    total_outflows_count: int
+    total_inflows_count: Decimal
+    total_outflows_count: Decimal
     flow_label: str
     bucket_end: Optional[datetime] = None
     is_complete: Optional[bool] = None
