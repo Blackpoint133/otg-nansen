@@ -149,6 +149,11 @@ No live data was persisted. This proves behavior only for this one window; it
 does not establish broader history, other dates or labels, Solana complete
 windows, production ingestion, or backfill behavior.
 
+Task 018 subsequently attempted the first live persistence run for that same
+bounded stream/window. Its only API request timed out before a page was
+returned. The audit records failure, and no rows or checkpoint were committed.
+This was not a successful live ingestion and adds no new source-data evidence.
+
 ## Not verified
 
 The account plan, exact credit balance, endpoint-specific maximum historical

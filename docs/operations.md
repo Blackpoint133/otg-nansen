@@ -54,3 +54,10 @@ does not send a standalone `order` field. Successful runs persist logical page
 and API-attempt counters. If bounded pagination reaches its limit, the failure
 audit retains the known fetched page and record counts while data and
 checkpoints remain unchanged.
+
+Task 018 attempted exactly one live Avalanche `$GUN` flow request with retries
+disabled and the configured three-call maximum. The request timed out on that
+first attempt. The durable run was marked failed, and independent staging
+verification found no flow rows or checkpoint for the target window. No retry
+or persistence followed. The failed audit is intentionally retained; another
+live attempt requires separate authorization.

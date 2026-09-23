@@ -99,3 +99,11 @@ window before opening the data transaction. Successful flow and DEX windows
 advance their checkpoint to the requested window end; valid empty windows are
 also checkpointed. Incomplete or out-of-window records fail the run without
 persisting data. Task 014 used fixture sources only.
+
+Task 018 made the first authorized live flow-ingestion attempt for the exact
+Avalanche `$GUN` `smart_money` window 2026-09-20. The single request timed out
+before returning a page. Its durable ingestion audit is `failed`; the exact
+target window has zero flow rows and no checkpoint. No live flow data was
+persisted. This attempt provides no new NUMERIC round-trip evidence; prior
+synthetic NUMERIC validation remains the database precision evidence.
+Production remains untouched.
