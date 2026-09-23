@@ -137,3 +137,12 @@ natural unique constraint over chain/token/label/date/bucket_end. Migration
 003 and re-keying were applied transactionally to staging after the source
 commit was published. All 52 existing rows were retained and matched the new
 key model; production remains out of scope.
+
+Task 023 adds nullable `nansen.ingestion_runs.source_warnings` in fresh schema
+SQL and migration 004. NULL means warning capture was unavailable or the run
+predates warning capture; `[]` means paginated responses were inspected and
+were warning-free. Non-empty arrays contain only page number, warning count,
+and sanitized category names. The CHECK permits only an array or NULL. The
+migration was published as an artifact but was not applied because the one
+authorized live warning classified as `UNKNOWN`. Existing staging rows and
+data remain unchanged.

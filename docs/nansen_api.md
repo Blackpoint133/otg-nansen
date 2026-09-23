@@ -2,12 +2,11 @@
 
 ## Documented
 
-Official documentation reviewed on 2026-09-21 states that API requests use
-POST with JSON bodies and an `apikey` header. Current documented limits are 20
-the current reference lists 15 requests per second and 300 requests per minute
-for Free, and 75 requests per second and 1,500 requests per minute for Pro.
-These are not embedded as universal client limits because the account plan is
-unverified. Common errors include
+Official documentation reviewed on 2026-09-23 states that API requests use
+POST with JSON bodies and an `apikey` header. The current rate-limit reference
+states 20 requests per second and 300 requests per minute per API key. These
+are not embedded as universal client limits. The account plan was not queried.
+Common errors include
 400, 401, 402, 403, 404, 422, 429, 500, and 504.
 
 The documented response pagination shape uses `page`, `per_page`, and an
@@ -28,6 +27,7 @@ Official references:
 - https://docs.nansen.ai/getting-started/credits
 - https://docs.nansen.ai/getting-started/error-handling
 - https://docs.nansen.ai/api/overview
+- https://docs.nansen.ai/api/token-god-mode/flows
 - https://docs.nansen.ai/guides/data-methodology-and-technical-reference
 
 ## Endpoint matrix
@@ -208,3 +208,22 @@ or non-positive bucket intervals may be normalized for diagnosis but are
 rejected before persistence. Migration 003 and re-key verification completed
 on staging; production was not changed. This design change does not authorize
 a broader backfill.
+
+## Task 023 warning boundary
+
+The current official Flows contract defines optional top-level `warnings` as
+an array of strings. It documents a warning entry when non-exchange labels
+have null CEX/DEX breakdown fields. It does not define null as a supported
+warnings container, warning wording, truncation warnings, partial-result
+warnings, aggregation warnings, or request-range warning semantics. The same
+contract documents hourly snapshots for ranges of seven days or less, daily
+snapshots for longer ranges, and `is_complete=false` for upper-cutoff bucket
+truncation or a live bucket (plus lower-cutoff truncation on Hyperliquid).
+
+The client retains warning values with each fetched page in memory. Historical
+ingestion stores only page number, warning count, and sanitized categories in
+`nansen.ingestion_runs.source_warnings`. Unknown warnings fail before data
+persistence. Task 023's single authorized live validation returned one warning
+that the strict classifier did not recognize. Its sanitized category was
+`UNKNOWN`; no raw warning text was retained. Broader backfill remains blocked
+pending warning-contract clarification.

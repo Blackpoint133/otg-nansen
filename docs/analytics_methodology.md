@@ -37,3 +37,10 @@ Chain, timezone, missing-date, bucket-resolution, and sample-size diagnostics
 must be retained with every future analysis. Align only observations whose
 bucket intervals are understood. No causal or predictive claim is permitted
 from a simple before/after comparison.
+
+Task 023's warning boundary prevents analyzing or retaining flow pages with
+unrecognized source warnings. The verified benign category concerns only the
+documented null CEX/DEX breakdown for non-exchange labels. Warning summaries
+contain no source text or response fields. Since the authorized live warning
+revalidation classified as `UNKNOWN`, broader historical ingestion remains
+blocked pending clarification.

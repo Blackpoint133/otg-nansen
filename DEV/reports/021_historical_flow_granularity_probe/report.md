@@ -221,3 +221,11 @@ transactionally; all 52 retained rows were re-keyed with no row loss. The
 natural bucket identity constraint and interval check are active on staging.
 Production was untouched. This resolves the identity design concern but does
 not authorize historical backfill.
+
+## Task 023 warning boundary addendum
+
+Task 023 subsequently addressed the warning-discard blind spot in the source
+client and ingestion audit design. Its one authorized live revalidation still
+classified the observed warning as `UNKNOWN` under the strict documented
+semantic matcher. No migration was applied and no broader ingestion was
+started; see `DEV/reports/023_source_warning_boundary/report.md`.

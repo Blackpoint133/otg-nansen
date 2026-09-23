@@ -60,3 +60,11 @@ flows use `order_by=[{'field': 'date', 'direction': 'ASC'}]` and DEX trades use
 `order_by=[{'field': 'block_timestamp', 'direction': 'ASC'}]`. Success audit
 updates persist page and API-attempt counters, and pagination-limit failures
 retain known page/record progress. These repairs are fixture-verified only.
+
+Task 023 retains top-level warnings with each fetched page in memory and
+classifies them before normalization or persistence. Only sanitized page,
+count, and category summaries enter ingestion audit rows; legacy runs remain
+NULL and an observed warning-free paginated run stores `[]`. Unknown warnings
+fail closed. The documented non-exchange breakdown warning is eligible only
+for `flows` with `smart_money`, but the authorized live revalidation remained
+`UNKNOWN`; broader backfill is blocked and migration 004 remains unapplied.

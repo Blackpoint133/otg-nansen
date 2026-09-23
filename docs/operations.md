@@ -91,3 +91,13 @@ for diagnosis, but orchestration rejects null or non-positive intervals before
 opening the data transaction. Task 022 published its migration before applying
 it to staging; all retained flow rows were re-keyed without row loss. Production
 remains untouched.
+
+Task 023 makes pagination retain warnings per source page in memory. Only
+sanitized categories, page numbers, and warning counts are stored in the run
+audit. Warning-free paginated runs store `[]`; legacy and pre-response runs
+remain NULL. Unknown warnings stop before the data transaction, and a
+pagination-limit failure preserves the warning evidence already fetched.
+The verified non-exchange breakdown warning is allowed only for flows labeled
+`smart_money`. Task 023's live revalidation was `UNKNOWN`, so migration 004
+remains unapplied, production is unchanged, and broader ingestion remains
+blocked.
