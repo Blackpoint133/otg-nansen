@@ -242,6 +242,27 @@ def test_executor_fails_before_starting_a_unit_beyond_live_call_budget():
     assert called == [1]
 
 
+@pytest.mark.parametrize("reported,ceiling", [(0, 1), (-1, 1), (2, 1)])
+def test_executor_rejects_invalid_callback_call_accounting(reported, ceiling):
+    result_plan = plan(CANONICAL_START, CANONICAL_START, max_desired_buckets_per_request=1)
+    with pytest.raises(BackfillExecutionError):
+        execute_pending_units(
+            result_plan, {}, max_units=1, max_live_calls=ceiling,
+            max_calls_per_unit=ceiling,
+            execute_unit=lambda unit, limit: reported,
+        )
+
+
+def test_executor_accepts_one_call_with_one_call_ceiling():
+    result_plan = plan(CANONICAL_START, CANONICAL_START, max_desired_buckets_per_request=1)
+    result = execute_pending_units(
+        result_plan, {}, max_units=1, max_live_calls=1,
+        execute_unit=lambda unit, limit: 1,
+    )
+    assert result.live_calls_used == 1
+    assert len(result.completed_unit_ids) == 1
+
+
 def test_executor_rejects_ambiguous_progress_before_starting_any_unit():
     result_plan = plan(CANONICAL_START, CANONICAL_START + timedelta(hours=1), max_desired_buckets_per_request=1)
     states = {result_plan.units[0].unit_id: "AMBIGUOUS"}

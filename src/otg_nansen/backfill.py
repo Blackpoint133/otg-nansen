@@ -394,8 +394,8 @@ def execute_pending_units(
             raise LiveCallBudgetExceeded("live-call budget would be exceeded before the next unit")
         attempted.append(unit.unit_id)
         unit_calls = execute_unit(unit, max_calls_per_unit)
-        if not isinstance(unit_calls, int) or isinstance(unit_calls, bool) or unit_calls < 0 or unit_calls > max_calls_per_unit:
-            raise BackfillExecutionError("unit executor exceeded its assigned live-call ceiling")
+        if not isinstance(unit_calls, int) or isinstance(unit_calls, bool) or unit_calls < 1 or unit_calls > max_calls_per_unit:
+            raise BackfillExecutionError("unit executor must report at least one call and stay within its assigned live-call ceiling")
         calls_used += unit_calls
         completed.append(unit.unit_id)
     remaining_pending = any(
