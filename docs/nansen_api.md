@@ -130,6 +130,15 @@ finite fractional JSON float. The normalizer does not round or truncate it,
 so complete-window ingestion remains NOT VERIFIED and no live data was
 persisted.
 
+Task 017M changes only `total_inflows_count` and `total_outflows_count` to
+required Decimal model values sourced from JSON numbers. Finite integer and
+fractional numeric values are preserved through `Decimal(str(value))`; strings,
+booleans, null, and non-finite values remain invalid. `holders_count` remains
+an integer. Optional CEX/DEX count fields remain optional integers and have
+only been live-observed as null for the tested Smart Money label. Task 017M
+made no live API calls, so complete-window normalization still requires a
+separately authorized live revalidation.
+
 ## Not verified
 
 The account plan, exact credit balance, endpoint-specific maximum historical

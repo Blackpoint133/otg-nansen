@@ -3,6 +3,7 @@
 import os
 from datetime import datetime, timezone
 from dataclasses import replace
+from decimal import Decimal
 import json
 from pathlib import Path
 from uuid import UUID
@@ -211,6 +212,34 @@ def test_staging_repository_lifecycle_and_constraints():
         assert _count(repo, "token_information", "name = %s", "TASK012_TEST_TOKEN") == 0
         assert _count(repo, "checkpoints", "last_success_run_id IN (%s, %s, %s, %s)", tuple(RUN_IDS)) == 0
         assert _count(repo, "ingestion_runs", "run_id IN (%s, %s, %s, %s)", tuple(RUN_IDS)) == 0
+        repo.close()
+
+
+@pytest.mark.skipif(os.getenv("NANSEN_RUN_POSTGRES_TESTS") != "1", reason="staging PostgreSQL tests are opt-in")
+def test_staging_flow_decimal_counts_round_trip_exactly():
+    repo = PostgresRepository.from_env()
+    label = "task017m_numeric_roundtrip"
+    model = replace(
+        normalize_flows(_load("flows_avalanche.json"), chain="avalanche", token_address=TOKEN, flow_label=label)[0],
+        total_inflows_count=Decimal("1.125"),
+        total_outflows_count=Decimal("-2.375"),
+    )
+    flow_key = map_flow(model)["flow_key"]
+    try:
+        assert _count(repo, "flows", "flow_key = %s", flow_key) == 0
+        repo.begin_data_transaction()
+        repo.store_flows([model])
+        repo.commit_data_transaction()
+        row = repo.audit_connection.execute(
+            "SELECT total_inflows_count, total_outflows_count FROM nansen.flows WHERE flow_key = %s",
+            (flow_key,),
+        ).fetchone()
+        assert row == (Decimal("1.125"), Decimal("-2.375"))
+    finally:
+        repo.rollback_data_transaction()
+        with repo.audit_connection.transaction():
+            repo.audit_connection.execute("DELETE FROM nansen.flows WHERE flow_key = %s", (flow_key,))
+        assert _count(repo, "flows", "flow_key = %s", flow_key) == 0
         repo.close()
 
 

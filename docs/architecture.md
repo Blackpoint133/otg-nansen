@@ -21,10 +21,14 @@ identity question because the reviewed Nansen chain list did not include
 
 The first code foundation is a bounded HTTP client with no service runtime.
 
-The raw API response boundary now feeds immutable normalized models for token
+The raw API response boundary feeds immutable normalized models for token
 information, flows, and DEX trades. Normalization validates required fields,
-preserves caller-trusted chain/token identity, uses UTC-aware timestamps, and
-uses Decimal values for token and financial numbers. No persistence exists yet.
+preserves caller-trusted chain/token identity, and uses UTC-aware timestamps.
+Financial and token quantities use Decimal. The two Nansen flow total count
+metrics also use Decimal because the live endpoint returned a finite
+fractional JSON number; `holders_count` and the optional CEX/DEX counts remain
+integer typed. PostgreSQL staging persistence is implemented and validated;
+the live historical window still requires a post-change normalization check.
 
 Task 007 defined an isolated `nansen` PostgreSQL schema
 with snapshot, flow, trade, ingestion-run, and checkpoint tables. A future

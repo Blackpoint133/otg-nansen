@@ -29,6 +29,13 @@ The guarded staging command is `python -m otg_nansen.migrate_staging`; it
 refuses any database other than `server_otg_staging`. PostgreSQL integration
 tests are opt-in with `NANSEN_RUN_POSTGRES_TESTS=1`; default pytest remains
 database-free.
+
+Task 017M applied `sql/002_flow_counts_numeric.sql` to `server_otg_staging`
+only. The migration changed only the two total flow count columns from BIGINT
+to NUMERIC, using explicit casts. The source commit was pushed before DDL;
+post-migration checks confirmed both columns are still NOT NULL, staging table
+ownership is unchanged, and all five Nansen tables remain. No live Nansen data
+was used. Production was not connected or modified.
 The checkpoint API does not accept caller-authoritative status flags. It
 requires a staged successful run with matching stream identity, and rejects
 zero-row eligibility. Flow scopes use separate successful runs and checkpoints

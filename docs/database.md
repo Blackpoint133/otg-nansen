@@ -37,6 +37,20 @@ The proposed isolated `nansen` schema contains:
 - `checkpoints`: chain/endpoint/token restart state referencing only a
   successful ingestion run.
 
+Task 017M updated the fresh-install definition so
+`flows.total_inflows_count` and `flows.total_outflows_count` use PostgreSQL
+`NUMERIC NOT NULL`. Migration `sql/002_flow_counts_numeric.sql` was applied to
+`server_otg_staging` only, converting those two existing BIGINT columns using
+explicit lossless casts. The staging columns are `numeric NOT NULL`; the five
+Nansen tables and their ownership remain intact. Production `server_otg` was
+not changed and migration 002 has NOT been applied there.
+
+The matching normalized fields are Python `Decimal`. Psycopg receives Decimal
+parameters directly, and its NUMERIC results are verified to round-trip exact
+synthetic fractional values. Flow keys remain based only on chain, canonical
+token identity, scope, and date; changing metric precision does not alter row
+identity.
+
 All Decimal model values map to PostgreSQL `NUMERIC`, not floating-point
 types. All accepted datetimes map to `TIMESTAMPTZ`. Complete-window reruns are
 idempotent through deterministic flow/trade keys. Partial or failed runs

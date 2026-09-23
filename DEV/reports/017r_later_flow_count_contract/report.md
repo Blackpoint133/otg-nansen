@@ -151,3 +151,13 @@ number. The correct model/schema policy must be reviewed before ingestion.
 Decide whether flow count fields should become exact Decimal values or whether
 the endpoint contract provides a safe separate interpretation. Do not start
 Task 018 or persist live flows before that decision.
+
+## TASK 017M ADDENDUM
+
+Technical review selected Decimal/NUMERIC for both total flow count metrics.
+The live response proved that a finite fractional JSON number can occur, and
+the official response schema exposes these fields as numeric values. Rounding
+or truncation would lose source information. The Python model and fresh schema
+definition now use Decimal/NUMERIC, and migration 002 was applied to staging
+only. Production remains unchanged. Complete live-window normalization still
+requires a separately authorized revalidation.
