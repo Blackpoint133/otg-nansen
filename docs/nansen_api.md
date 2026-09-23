@@ -125,8 +125,10 @@ Task 016 evidence classification:
 Task 017 attempted the first bounded multi-page validation for the same
 historical day. The paginator reached a final page after three no-retry
 requests, but normalization of the complete collected set failed on a later
-record at `total_inflows_count`. Complete-window ingestion therefore remains
-NOT VERIFIED, and no live data was persisted.
+record at `total_inflows_count`. Task 017R diagnosed the later field as a
+finite fractional JSON float. The normalizer does not round or truncate it,
+so complete-window ingestion remains NOT VERIFIED and no live data was
+persisted.
 
 ## Not verified
 

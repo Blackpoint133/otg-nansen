@@ -114,5 +114,15 @@ was not recorded and no speculative repair was attempted.
 
 ## NEXT_RECOMMENDED_TASK
 
-Review the sanitized later-record mismatch and authorize a separately bounded
-repair/validation task. Do not persist live flows or start Task 018.
+Task 017R diagnosed the later-record mismatch as a finite fractional count
+wire value. Review the model/schema decision before any repair. Do not persist
+live flows or start Task 018.
+
+## TASK 017R ADDENDUM
+
+The later count mismatch was diagnosed with three no-retry requests. The
+paginator again reached the final page. The complete set contained 23 records;
+normalization failed at `flows.data[2].total_inflows_count` because the field
+was a finite fractional JSON float. No live value was recorded. The normalizer
+was not changed because rounding or truncation would not preserve the source
+value exactly. Complete-window acceptance remains open.
