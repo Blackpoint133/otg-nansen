@@ -24,9 +24,16 @@ RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
 
 
 @dataclass(frozen=True)
+class PaginationPageMetadata:
+    page: int
+    warnings: tuple[Any, ...]
+
+
+@dataclass(frozen=True)
 class PaginationResult:
     records: list[Any]
     pages_fetched: int
+    page_metadata: tuple[PaginationPageMetadata, ...] = ()
 
 
 class NansenClient:
@@ -86,7 +93,12 @@ class NansenClient:
 
     def paginate(self, endpoint: str, payload: Dict[str, Any]) -> list[Any]:
         """Collect bounded pages until the response marks the final page."""
-        return self.paginate_with_metadata(endpoint, payload).records
+        result = self.paginate_with_metadata(endpoint, payload)
+        if any(page.warnings for page in result.page_metadata):
+            error = ResponseContractError(f"pagination returned source warnings: endpoint={endpoint}; use paginate_with_metadata()")
+            error.page_metadata = result.page_metadata
+            raise error
+        return result.records
 
     def paginate_with_metadata(self, endpoint: str, payload: Dict[str, Any]) -> PaginationResult:
         """Collect bounded pages and retain logical-page metadata."""
@@ -97,9 +109,22 @@ class NansenClient:
         request_payload["pagination"] = pagination
         records: list[Any] = []
         pages_fetched = 0
+        page_metadata: list[PaginationPageMetadata] = []
         for _ in range(self.config.max_pages):
             response = self.request(endpoint, request_payload)
             pages_fetched += 1
+            warnings = response.get("warnings", [])
+            if not isinstance(warnings, list):
+                malformed = PaginationPageMetadata(page=pages_fetched, warnings=("<malformed-warning-container>",))
+                error = ResponseContractError(f"Paginated endpoint returned invalid warnings: endpoint={endpoint} page={pages_fetched}")
+                error.page_metadata = tuple([*page_metadata, malformed])
+                raise error
+            if any(not isinstance(warning, str) for warning in warnings):
+                malformed = PaginationPageMetadata(page=pages_fetched, warnings=tuple(warnings))
+                error = ResponseContractError(f"Paginated endpoint returned invalid warnings: endpoint={endpoint} page={pages_fetched}")
+                error.page_metadata = tuple([*page_metadata, malformed])
+                raise error
+            page_metadata.append(PaginationPageMetadata(page=pages_fetched, warnings=tuple(warnings)))
             data = response.get("data")
             response_pagination = response.get("pagination")
             if not isinstance(data, list):
@@ -108,9 +133,9 @@ class NansenClient:
                 raise ResponseContractError(f"Paginated endpoint returned invalid pagination: endpoint={endpoint}")
             records.extend(data)
             if response_pagination["is_last_page"]:
-                return PaginationResult(records=records, pages_fetched=pages_fetched)
+                return PaginationResult(records=records, pages_fetched=pages_fetched, page_metadata=tuple(page_metadata))
             pagination["page"] = int(pagination["page"]) + 1
-        raise PaginationLimitReached(endpoint, pages_fetched, len(records))
+        raise PaginationLimitReached(endpoint, pages_fetched, len(records), page_metadata)
 
     def token_information(self, chain: str, token_address: str, timeframe: str = "1d") -> Dict[str, Any]:
         return self.request("/api/v1/tgm/token-information", {"chain": chain, "token_address": token_address, "timeframe": timeframe})

@@ -78,6 +78,7 @@ def test_staging_repository_lifecycle_and_constraints():
         cleanup()
         repo.begin_ingestion_run(_run(RUN_IDS[0], "task012_smart_money"))
         assert _count(repo, "ingestion_runs", "run_id = %s", RUN_IDS[0]) == 1
+        assert repo.audit_connection.execute("SELECT source_warnings FROM nansen.ingestion_runs WHERE run_id = %s", (RUN_IDS[0],)).fetchone()[0] is None
 
         repo.begin_data_transaction()
         repo.store_flows([incomplete])
@@ -103,11 +104,13 @@ def test_staging_repository_lifecycle_and_constraints():
         scoped_exchange = replace(flow, flow_label="task012_exchange")
         repo.begin_data_transaction()
         repo.store_flows([scoped_exchange])
-        repo.complete_ingestion_run(RUN_IDS[3], {"records_inserted": 1})
+        benign_summary = [{"page": 1, "warning_count": 1, "categories": ["NON_EXCHANGE_BREAKDOWN_UNAVAILABLE"]}]
+        repo.complete_ingestion_run(RUN_IDS[3], {"records_inserted": 1}, source_warnings=benign_summary)
         repo.advance_checkpoint("avalanche", "flows", TOKEN, scoped_exchange.date, RUN_IDS[3], "task012_exchange")
         repo.commit_data_transaction()
         assert _count(repo, "flows", "flow_label IN ('task012_smart_money', 'task012_exchange')", None) == 2
         assert repo.read_checkpoint("avalanche", "flows", TOKEN, "task012_exchange")["last_success_run_id"] == UUID(RUN_IDS[3])
+        assert repo.audit_connection.execute("SELECT source_warnings FROM nansen.ingestion_runs WHERE run_id = %s", (RUN_IDS[3],)).fetchone()[0] == benign_summary
 
         repo.begin_data_transaction()
         repo.store_dex_trades([trade])
@@ -132,7 +135,7 @@ def test_staging_repository_lifecycle_and_constraints():
         success_flow = replace(flow, flow_label="task012_success")
         repo.begin_data_transaction()
         repo.store_flows([success_flow])
-        repo.complete_ingestion_run(RUN_IDS[1], {"records_inserted": 1})
+        repo.complete_ingestion_run(RUN_IDS[1], {"records_inserted": 1}, source_warnings=[])
         repo.advance_checkpoint("avalanche", "flows", TOKEN, success_flow.date, RUN_IDS[1], " task012_success ")
         before = repo.audit_connection.execute("SELECT status FROM nansen.ingestion_runs WHERE run_id = %s", (RUN_IDS[1],)).fetchone()[0]
         assert before == "running"
@@ -140,6 +143,7 @@ def test_staging_repository_lifecycle_and_constraints():
         after = repo.audit_connection.execute("SELECT status FROM nansen.ingestion_runs WHERE run_id = %s", (RUN_IDS[1],)).fetchone()[0]
         checkpoint = repo.read_checkpoint("avalanche", "flows", TOKEN, "task012_success")
         assert after == "success" and checkpoint["last_success_run_id"] == UUID(RUN_IDS[1])
+        assert repo.audit_connection.execute("SELECT source_warnings FROM nansen.ingestion_runs WHERE run_id = %s", (RUN_IDS[1],)).fetchone()[0] == []
 
         newer = success_flow.date.replace(hour=13)
         older = success_flow.date.replace(hour=11)
@@ -160,10 +164,18 @@ def test_staging_repository_lifecycle_and_constraints():
         repo.rollback_data_transaction()
         assert repo.read_checkpoint("avalanche", "flows", TOKEN, "task012_failure") is None
         assert repo.audit_connection.execute("SELECT status FROM nansen.ingestion_runs WHERE run_id = %s", (RUN_IDS[2],)).fetchone()[0] == "running"
-        repo.fail_ingestion_run(RUN_IDS[2], "TestFailure", "synthetic rollback")
+        unknown_summary = [{"page": 1, "warning_count": 1, "categories": ["UNKNOWN"]}]
+        repo.fail_ingestion_run(RUN_IDS[2], "TestFailure", "synthetic rollback", source_warnings=unknown_summary)
         assert repo.audit_connection.execute("SELECT status FROM nansen.ingestion_runs WHERE run_id = %s", (RUN_IDS[2],)).fetchone()[0] == "failed"
+        assert repo.audit_connection.execute("SELECT source_warnings FROM nansen.ingestion_runs WHERE run_id = %s", (RUN_IDS[2],)).fetchone()[0] == unknown_summary
 
-        invalid_base = list((RUN_IDS[0], datetime(2026, 9, 22, tzinfo=timezone.utc), "running", "avalanche", "flows", TOKEN, "task012_invalid", Jsonb({}), None, None, 0, 0, 0, 0, 0, 0, None, None))
+        invalid_base = list((RUN_IDS[0], datetime(2026, 9, 22, tzinfo=timezone.utc), "running", "avalanche", "flows", TOKEN, "task012_invalid", Jsonb({}), None, None, 0, 0, 0, 0, 0, 0, None, None, None))
+        malformed_warning_values = list(invalid_base)
+        malformed_warning_values[0] = "00000000-0000-0011-0000-000000000100"
+        malformed_warning_values[-1] = Jsonb({"raw": "must fail array check"})
+        with pytest.raises(CheckViolation):
+            with repo.audit_connection.transaction():
+                repo.audit_connection.execute(INGESTION_RUN_INSERT_SQL, tuple(malformed_warning_values))
         invalid_scopes = [
             {"endpoint": "flows", "token_address": TOKEN, "flow_label": "task012_invalid"},
             {"chain": "avalanche", "token_address": TOKEN, "flow_label": "task012_invalid"},

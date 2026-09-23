@@ -9,10 +9,11 @@ from typing import Any, Callable, Optional, Protocol
 from uuid import uuid4
 
 from .client import PaginationResult
-from .errors import IncompleteSourceWindow, IngestionWindowError, PaginationLimitReached
+from .errors import IncompleteSourceWindow, IngestionWindowError, PaginationLimitReached, SourceWarningError
 from .models import NormalizedDexTrade, NormalizedFlowRecord, NormalizedTokenInformation
 from .normalize import normalize_dex_trades, normalize_flows, normalize_token_information
 from .persistence import NansenRepository, canonical_request_scope, map_ingestion_run
+from .source_warnings import summarize_page_warnings, sanitized_unknown_summaries
 
 
 def _utc(value: datetime, field: str) -> datetime:
@@ -130,6 +131,7 @@ class NansenIngestionOrchestrator:
         run_id, _ = self._start_run(chain, endpoint, token_address, scope, window)
         calls_before = self.source.requests_attempted
         pages = received = normalized = 0
+        source_warnings: Optional[list[dict[str, Any]]] = None
         try:
             payload: dict[str, Any] = {
                 "chain": chain, "token_address": token_address, "date": window.to_payload(),
@@ -141,6 +143,7 @@ class NansenIngestionOrchestrator:
             result = self.source.paginate_with_metadata(api_endpoint, payload)
             pages = result.pages_fetched
             received = len(result.records)
+            source_warnings = summarize_page_warnings(endpoint, scope, result.page_metadata)
             if endpoint == "flows":
                 models = normalize_flows({"data": result.records}, chain=chain, token_address=token_address, flow_label=scope)
                 self._validate_flows(models, window)
@@ -155,7 +158,7 @@ class NansenIngestionOrchestrator:
                     self.repository.store_flows(models)
                 else:
                     self.repository.store_dex_trades(models)
-                self.repository.complete_ingestion_run(run_id, self._counts(pages, calls, received, normalized))
+                self.repository.complete_ingestion_run(run_id, self._counts(pages, calls, received, normalized), source_warnings=source_warnings)
                 self.repository.advance_checkpoint(chain, endpoint, token_address, window.end, run_id, scope or None)
                 self.repository.commit_data_transaction()
             except BaseException:
@@ -168,7 +171,15 @@ class NansenIngestionOrchestrator:
                 pages = error.pages_fetched
                 received = error.records_collected
                 normalized = 0
-            self._fail(run_id, error, pages, self.source.requests_attempted - calls_before, received, normalized)
+                try:
+                    source_warnings = summarize_page_warnings(endpoint, scope, error.page_metadata)
+                except SourceWarningError:
+                    source_warnings = sanitized_unknown_summaries(error.page_metadata)
+            elif source_warnings is None and getattr(error, "page_metadata", None) is not None:
+                source_warnings = sanitized_unknown_summaries(error.page_metadata)
+            elif source_warnings is None and "result" in locals():
+                source_warnings = sanitized_unknown_summaries(result.page_metadata)
+            self._fail(run_id, error, pages, self.source.requests_attempted - calls_before, received, normalized, source_warnings)
             raise
 
     def _start_run(self, chain: str, endpoint: str, token_address: str, flow_label: Optional[str], window: Optional[IngestionWindow]) -> tuple[str, datetime]:
@@ -187,9 +198,11 @@ class NansenIngestionOrchestrator:
         return {"pages_requested": pages, "api_calls": calls, "records_received": received, "records_normalized": normalized,
                 "records_inserted": 0, "records_updated_or_conflicted": 0}
 
-    def _fail(self, run_id: str, error: BaseException, pages: int, calls: int, received: int, normalized: int) -> None:
+    def _fail(self, run_id: str, error: BaseException, pages: int, calls: int, received: int, normalized: int, source_warnings: Optional[list[dict[str, Any]]] = None) -> None:
         secrets = tuple(value for value in (getattr(getattr(self.source, "config", None), "api_key", None),) if value)
-        self.repository.fail_ingestion_run(run_id, type(error).__name__, safe_failure_summary(error, secrets), counts=self._counts(pages, calls, received, normalized))
+        if source_warnings is None and isinstance(error, SourceWarningError):
+            source_warnings = [{"page": error.page, "warning_count": error.warning_count, "categories": list(error.categories)}]
+        self.repository.fail_ingestion_run(run_id, type(error).__name__, safe_failure_summary(error, secrets), counts=self._counts(pages, calls, received, normalized), source_warnings=source_warnings)
 
     @staticmethod
     def _validate_flows(models: list[NormalizedFlowRecord], window: IngestionWindow) -> None:

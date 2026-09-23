@@ -86,10 +86,14 @@ CREATE TABLE nansen.ingestion_runs (
     records_updated_or_conflicted INTEGER NOT NULL DEFAULT 0,
     error_type TEXT,
     error_summary TEXT,
+    source_warnings JSONB,
     UNIQUE (run_id, chain, endpoint, token_address, flow_label),
     CHECK (
         (endpoint = 'flows' AND flow_label = btrim(flow_label) AND btrim(flow_label) <> '')
         OR (endpoint <> 'flows' AND flow_label = '')
+    ),
+    CHECK (
+        source_warnings IS NULL OR jsonb_typeof(source_warnings) = 'array'
     ),
     CHECK (
         (

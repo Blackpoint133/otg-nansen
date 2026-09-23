@@ -63,20 +63,20 @@ INGESTION_RUN_INSERT_SQL = """INSERT INTO nansen.ingestion_runs (
     run_id, started_at, status, chain, endpoint, token_address, flow_label,
     request_scope, window_start, window_end, pages_requested, api_calls,
     records_received, records_normalized, records_inserted,
-    records_updated_or_conflicted, error_type, error_summary
-) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"""
+    records_updated_or_conflicted, error_type, error_summary, source_warnings
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);"""
 
 INGESTION_RUN_SUCCESS_SQL = """UPDATE nansen.ingestion_runs
 SET status = 'success', finished_at = %s, pages_requested = %s,
     api_calls = %s, records_received = %s, records_normalized = %s,
     records_inserted = %s, records_updated_or_conflicted = %s,
-    error_type = NULL, error_summary = NULL
+    error_type = NULL, error_summary = NULL, source_warnings = %s
 WHERE run_id = %s;"""
 
 INGESTION_RUN_FAILURE_SQL = """UPDATE nansen.ingestion_runs
 SET status = %s, finished_at = %s, pages_requested = %s, api_calls = %s,
     records_received = %s, records_normalized = %s,
-    error_type = %s, error_summary = %s
+    error_type = %s, error_summary = %s, source_warnings = %s
 WHERE run_id = %s;"""
 
 CHECKPOINT_READ_SQL = """SELECT chain, endpoint, token_address, flow_label,
@@ -291,6 +291,7 @@ def map_ingestion_run(
     records_updated_or_conflicted: int = 0,
     error_type: Optional[str] = None,
     error_summary: Optional[str] = None,
+    source_warnings: Optional[list[dict[str, Any]]] = None,
 ) -> dict[str, Any]:
     if status not in {"running", "success", "failed", "partial"}:
         raise PersistenceDesignError("invalid ingestion run status")
@@ -315,6 +316,7 @@ def map_ingestion_run(
         "records_updated_or_conflicted": records_updated_or_conflicted,
         "error_type": error_type,
         "error_summary": error_summary,
+        "source_warnings": source_warnings,
     }
 
 
@@ -339,8 +341,8 @@ class NansenRepository(Protocol):
     def store_flows(self, models: list[NormalizedFlowRecord]) -> None: ...
     def store_dex_trades(self, models: list[NormalizedDexTrade]) -> None: ...
     def begin_ingestion_run(self, run: dict[str, Any]) -> None: ...
-    def complete_ingestion_run(self, run_id: str, counts: dict[str, int]) -> None: ...
-    def fail_ingestion_run(self, run_id: str, error_type: str, error_summary: str, partial: bool = False, counts: Optional[dict[str, int]] = None) -> None: ...
+    def complete_ingestion_run(self, run_id: str, counts: dict[str, int], source_warnings: Optional[list[dict[str, Any]]] = None) -> None: ...
+    def fail_ingestion_run(self, run_id: str, error_type: str, error_summary: str, partial: bool = False, counts: Optional[dict[str, int]] = None, source_warnings: Optional[list[dict[str, Any]]] = None) -> None: ...
     def begin_data_transaction(self) -> None: ...
     def commit_data_transaction(self) -> None: ...
     def rollback_data_transaction(self) -> None: ...
@@ -458,11 +460,11 @@ class InMemoryTransactionRepository:
         self._staged_checkpoints = None
         self._staged_ingestion_runs = None
 
-    def complete_ingestion_run(self, run_id: str, counts: dict[str, int]) -> None:
+    def complete_ingestion_run(self, run_id: str, counts: dict[str, int], source_warnings: Optional[list[dict[str, Any]]] = None) -> None:
         _, _, runs = self._require_transaction()
-        runs[run_id].update(counts, status="success", finished_at=datetime.now(timezone.utc))
+        runs[run_id].update(counts, status="success", finished_at=datetime.now(timezone.utc), source_warnings=source_warnings if source_warnings is not None else [])
 
-    def fail_ingestion_run(self, run_id: str, error_type: str, error_summary: str, partial: bool = False, counts: Optional[dict[str, int]] = None) -> None:
+    def fail_ingestion_run(self, run_id: str, error_type: str, error_summary: str, partial: bool = False, counts: Optional[dict[str, int]] = None, source_warnings: Optional[list[dict[str, Any]]] = None) -> None:
         counts = counts or {}
         self.ingestion_runs[run_id].update(
             status="partial" if partial else "failed",
@@ -472,5 +474,6 @@ class InMemoryTransactionRepository:
             records_normalized=counts.get("records_normalized", 0),
             error_type=error_type,
             error_summary=error_summary,
+            **({"source_warnings": source_warnings} if source_warnings is not None else {}),
             finished_at=datetime.now(timezone.utc),
         )

@@ -37,7 +37,7 @@ class NansenTransportError(NansenError):
 class PaginationLimitReached(NansenError):
     """Raised when a paginated response remains incomplete at the page limit."""
 
-    def __init__(self, endpoint: str, pages_fetched: int, records_collected: int):
+    def __init__(self, endpoint: str, pages_fetched: int, records_collected: int, page_metadata=()):
         super().__init__(
             f"pagination limit reached: endpoint={endpoint} "
             f"pages_fetched={pages_fetched} records_collected={records_collected}"
@@ -45,6 +45,19 @@ class PaginationLimitReached(NansenError):
         self.endpoint = endpoint
         self.pages_fetched = pages_fetched
         self.records_collected = records_collected
+        self.page_metadata = tuple(page_metadata)
+
+
+class SourceWarningError(NansenError):
+    """Raised when source warnings are not explicitly accepted."""
+
+    def __init__(self, endpoint: str, page: int, warning_count: int, categories):
+        cats = ",".join(categories)
+        super().__init__(f"source warnings rejected: endpoint={endpoint} page={page} warning_count={warning_count} categories={cats}")
+        self.endpoint = endpoint
+        self.page = page
+        self.warning_count = warning_count
+        self.categories = tuple(categories)
 
 
 class NormalizationError(NansenError):

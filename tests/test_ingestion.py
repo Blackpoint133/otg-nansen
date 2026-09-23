@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from otg_nansen.client import PaginationResult
-from otg_nansen.errors import IncompleteSourceWindow, IngestionWindowError, PaginationLimitReached, RequestBudgetExceeded
+from otg_nansen.client import PaginationPageMetadata, PaginationResult
+from otg_nansen.errors import IncompleteSourceWindow, IngestionWindowError, PaginationLimitReached, RequestBudgetExceeded, ResponseContractError, SourceWarningError
 from otg_nansen.ingestion import IngestionWindow, NansenIngestionOrchestrator, safe_failure_summary
 from otg_nansen.persistence import InMemoryTransactionRepository
 
@@ -24,12 +24,13 @@ def load(name):
 
 
 class FakeSource:
-    def __init__(self, token=None, pages=None, error=None, attempts=0):
+    def __init__(self, token=None, pages=None, error=None, attempts=0, page_metadata=None):
         self.token = token or load("token_information_avalanche.json")
         self.pages = pages or []
         self.error = error
         self.requests_attempted = attempts
         self.requests = []
+        self.page_metadata = tuple(page_metadata or ())
 
     def request(self, endpoint, payload):
         self.requests_attempted += 1
@@ -46,7 +47,7 @@ class FakeSource:
             if isinstance(page, BaseException):
                 raise page
             records.extend(page)
-        return PaginationResult(records, len(self.pages))
+        return PaginationResult(records, len(self.pages), self.page_metadata)
 
 
 def flow_records():
@@ -86,6 +87,41 @@ def test_flow_success_audits_and_checkpoints_at_window_end():
     assert source.requests[0][1]["date"] == WINDOW.to_payload()
     assert source.requests[0][1]["order_by"] == [{"field": "date", "direction": "ASC"}]
     assert "order" not in source.requests[0][1]
+    assert run["source_warnings"] == []
+
+
+def test_benign_warning_is_audited_sanitized_and_ingested():
+    source = FakeSource(pages=[flow_records()], page_metadata=[PaginationPageMetadata(1, ("CEX/DEX breakdown fields are null for non-exchange labels.",))])
+    instance, repository = orchestrator(source)
+    result = instance.ingest_flows(chain="avalanche", token_address=TOKEN, window=WINDOW, flow_label="smart_money")
+    assert repository.ingestion_runs[result.run_id]["source_warnings"] == [
+        {"page": 1, "warning_count": 1, "categories": ["NON_EXCHANGE_BREAKDOWN_UNAVAILABLE"]}
+    ]
+
+
+def test_unknown_warning_fails_before_rows_or_checkpoint_commit():
+    raw = "synthetic unrelated source warning"
+    source = FakeSource(pages=[flow_records()], page_metadata=[PaginationPageMetadata(1, (raw,))])
+    instance, repository = orchestrator(source)
+    with pytest.raises(SourceWarningError) as error:
+        instance.ingest_flows(chain="avalanche", token_address=TOKEN, window=WINDOW, flow_label="smart_money")
+    run = next(iter(repository.ingestion_runs.values()))
+    assert run["status"] == "failed"
+    assert run["source_warnings"] == [{"page": 1, "warning_count": 1, "categories": ["UNKNOWN"]}]
+    assert raw not in str(error.value) and raw not in run["error_summary"]
+    assert repository.data["flows"] == {} and repository.checkpoints == {}
+
+
+def test_malformed_warning_container_retains_only_unknown_audit_evidence():
+    error = ResponseContractError("Paginated endpoint returned invalid warnings: endpoint=flows page=1")
+    error.page_metadata = (PaginationPageMetadata(1, ("<malformed-warning-container>",)),)
+    instance, repository = orchestrator(FakeSource(pages=[error]))
+    with pytest.raises(ResponseContractError):
+        instance.ingest_flows(chain="avalanche", token_address=TOKEN, window=WINDOW, flow_label="smart_money")
+    run = next(iter(repository.ingestion_runs.values()))
+    assert run["status"] == "failed"
+    assert run["source_warnings"] == [{"page": 1, "warning_count": 1, "categories": ["UNKNOWN"]}]
+    assert repository.data["flows"] == {} and repository.checkpoints == {}
 
 
 def test_flow_multi_page_and_retry_attempt_accounting():
@@ -174,6 +210,22 @@ def test_pagination_and_budget_failures_are_audited():
             assert run["pages_requested"] == 2 and run["records_received"] == 3
         else:
             assert run["pages_requested"] == 0 and run["records_received"] == 0
+
+
+def test_pagination_limit_preserves_sanitized_warning_audit_and_atomicity():
+    metadata = [PaginationPageMetadata(1, ("synthetic warning A",)), PaginationPageMetadata(2, ("synthetic warning B",))]
+    limit = PaginationLimitReached("/api/v1/tgm/flows", 2, 3, metadata)
+    source = FakeSource(pages=[limit])
+    instance, repository = orchestrator(source)
+    with pytest.raises(PaginationLimitReached):
+        instance.ingest_flows(chain="avalanche", token_address=TOKEN, window=WINDOW, flow_label="smart_money")
+    run = next(iter(repository.ingestion_runs.values()))
+    assert run["source_warnings"] == [
+        {"page": 1, "warning_count": 1, "categories": ["UNKNOWN"]},
+        {"page": 2, "warning_count": 1, "categories": ["UNKNOWN"]},
+    ]
+    assert run["pages_requested"] == 2 and run["records_received"] == 3
+    assert repository.data["flows"] == {} and repository.checkpoints == {}
 
 
 def test_rerunning_same_window_is_idempotent_and_audited_twice():

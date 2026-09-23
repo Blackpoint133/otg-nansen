@@ -186,11 +186,47 @@ def test_pagination_metadata_counts_logical_pages_not_attempts():
     assert api.requests_attempted == 2
 
 
+def test_page_warnings_are_retained_with_each_page_and_record_only_refuses_them():
+    responses = [
+        FakeResponse(body={"data": [1], "pagination": {"is_last_page": False}, "warnings": ["Fixture warning A"]}),
+        FakeResponse(body={"data": [2], "pagination": {"is_last_page": False}, "warnings": ["Fixture warning B"]}),
+        FakeResponse(body={"data": [3], "pagination": {"is_last_page": True}}),
+    ]
+    api, _ = client(responses, max_pages=3)
+    result = api.paginate_with_metadata("/pages", {})
+    assert [(page.page, page.warnings) for page in result.page_metadata] == [(1, ("Fixture warning A",)), (2, ("Fixture warning B",)), (3, ())]
+    api, _ = client([FakeResponse(body={"data": [], "pagination": {"is_last_page": True}, "warnings": ["secret warning"]})])
+    with pytest.raises(ResponseContractError) as error:
+        api.paginate("/pages", {})
+    assert "secret warning" not in str(error.value)
+    assert error.value.page_metadata[0].warnings == ("secret warning",)
+
+
+@pytest.mark.parametrize("warnings", [None, "bad", {}, [1]])
+def test_malformed_warning_wire_container_fails_safely(warnings):
+    api, _ = client([FakeResponse(body={"data": [], "pagination": {"is_last_page": True}, "warnings": warnings})])
+    with pytest.raises(ResponseContractError) as error:
+        api.paginate_with_metadata("/pages", {})
+    assert "warnings" in str(error.value)
+    assert getattr(error.value, "page_metadata", ())
+    assert "bad" not in str(error.value)
+
+
 def test_pagination_stops_at_max_pages():
     responses = [FakeResponse(body={"data": [1], "pagination": {"is_last_page": False}}) for _ in range(2)]
     api, _ = client(responses, max_pages=2)
     with pytest.raises(PaginationLimitReached):
         api.paginate("/pages", {})
+
+
+def test_pagination_limit_retains_page_warnings_without_exposing_them():
+    raw = "fixture-only private warning"
+    responses = [FakeResponse(body={"data": [1], "pagination": {"is_last_page": False}, "warnings": [raw]})]
+    api, _ = client(responses, max_pages=1)
+    with pytest.raises(PaginationLimitReached) as error:
+        api.paginate_with_metadata("/pages", {})
+    assert error.value.page_metadata[0].warnings == (raw,)
+    assert raw not in str(error.value)
 
 
 def test_pagination_rejects_non_list_data():

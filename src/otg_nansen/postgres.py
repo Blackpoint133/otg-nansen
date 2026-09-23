@@ -92,7 +92,7 @@ class PostgresRepository:
             run["token_address"], run["flow_label"], Jsonb(run["request_scope"]), run["window_start"],
             run["window_end"], run["pages_requested"], run["api_calls"], run["records_received"],
             run["records_normalized"], run["records_inserted"], run["records_updated_or_conflicted"],
-            run["error_type"], run["error_summary"],
+            run["error_type"], run["error_summary"], Jsonb(run["source_warnings"]) if run.get("source_warnings") is not None else None,
         )
         self.audit_connection.execute(INGESTION_RUN_INSERT_SQL, values)
 
@@ -173,10 +173,10 @@ class PostgresRepository:
         if cursor.rowcount not in (0, 1):
             raise PersistenceDesignError("unexpected checkpoint upsert result")
 
-    def complete_ingestion_run(self, run_id: str, counts: dict[str, int]) -> None:
+    def complete_ingestion_run(self, run_id: str, counts: dict[str, int], source_warnings: Optional[list[dict[str, Any]]] = None) -> None:
         values = (datetime.now().astimezone(), counts.get("pages_requested", 0), counts.get("api_calls", 0),
                   counts.get("records_received", 0), counts.get("records_normalized", 0),
-                  counts.get("records_inserted", 0), counts.get("records_updated_or_conflicted", 0), run_id)
+                  counts.get("records_inserted", 0), counts.get("records_updated_or_conflicted", 0), Jsonb(source_warnings if source_warnings is not None else []), run_id)
         self._data_cursor().execute(INGESTION_RUN_SUCCESS_SQL, values)
 
     def commit_data_transaction(self) -> None:
@@ -189,13 +189,13 @@ class PostgresRepository:
             self.data_connection.rollback()
         self._data_transaction_active = False
 
-    def fail_ingestion_run(self, run_id: str, error_type: str, error_summary: str, partial: bool = False, counts: Optional[dict[str, int]] = None) -> None:
+    def fail_ingestion_run(self, run_id: str, error_type: str, error_summary: str, partial: bool = False, counts: Optional[dict[str, int]] = None, source_warnings: Optional[list[dict[str, Any]]] = None) -> None:
         counts = counts or {}
         self.audit_connection.execute(
             INGESTION_RUN_FAILURE_SQL,
             ("partial" if partial else "failed", datetime.now().astimezone(), counts.get("pages_requested", 0),
              counts.get("api_calls", 0), counts.get("records_received", 0), counts.get("records_normalized", 0),
-             error_type, error_summary, run_id),
+             error_type, error_summary, Jsonb(source_warnings) if source_warnings is not None else None, run_id),
         )
 
 
