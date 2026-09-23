@@ -306,10 +306,9 @@ def main(argv=None) -> int:
         print("EXECUTION_REFUSED=HOST_RESOURCE_PRESSURE")
         return 2
 
-        repository = PostgresRepository.from_env()
+    repository = PostgresRepository.from_env()
     try:
         _assert_writable_staging(repository)
-        preflight = repository.audit_connection
         progress_connection = _readonly_connection()
         try:
             progress_again = inspect_plan_progress(progress_connection, plan)
@@ -372,7 +371,6 @@ def main(argv=None) -> int:
             after_rows, after_duplicates = _global_rows(fresh)
             audit_count_after = _audit_count(fresh)
             checkpoint_after = _checkpoint(fresh)
-            checkpoint_json = json.dumps(checkpoint_after, default=str)
             print(f"BATCH_DESIRED_UNIQUE_HOURLY_BEFORE={len(before_counts['hourly_identities'] & before_counts['desired_identities'])}")
             print(f"BATCH_DESIRED_UNIQUE_HOURLY_AFTER={len(after_counts['hourly_identities'] & after_counts['desired_identities'])}")
             print(f"NEW_DESIRED_IDENTITIES_ADDED={len(after_counts['hourly_identities']-before_counts['hourly_identities'])}")
@@ -406,6 +404,7 @@ def main(argv=None) -> int:
                 raise BackfillExecutionError("restart resume did not select unit four")
             print("RESTART_RESUME_PROOF=PASS")
             print("TASK_027_STATUS=SUCCESS")
+            _resource_snapshot("AFTER_BATCH")
         finally:
             fresh.close()
         return 0
