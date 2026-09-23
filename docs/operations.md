@@ -103,3 +103,5 @@ remains unapplied, production is unchanged, and broader ingestion remains
 blocked.
 
 Task 023F accepts one exact warning fingerprint only for TGM Flows `smart_money`, and only after normalized records confirm all four CEX/DEX breakdown fields are null. Different wording and mixed unknown warnings fail closed before the data transaction. Migration 004 is applied to staging only; production remains untouched. The raw warning is never stored or logged.
+
+Task 024 used one foreground orchestrator run with one API call, one page, zero retries, and a one-page bound for 2025-04-25 through 2025-05-01 UTC. It retained 167 hourly buckets beside six pre-existing daily buckets. The exact warning policy passed and the audit stored only the sanitized warning category. The September high-water checkpoint did not regress. No service or scheduler was added, and production remains untouched.

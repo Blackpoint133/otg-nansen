@@ -46,3 +46,5 @@ revalidation classified as `UNKNOWN`, broader historical ingestion remains
 blocked pending clarification.
 
 Task 023F later adopts the exact recorded warning fingerprint, limited to Flows `smart_money` and guarded by null CEX/DEX breakdown fields on every normalized result row. The warning text is not retained, and changed wording remains unknown. This source-specific boundary does not establish other labels or broader historical coverage.
+
+Task 024 validated the documented hourly resolution for one seven-day Avalanche `smart_money` request: 167 hourly buckets were retained across all seven UTC calendar dates, alongside six unchanged daily buckets. One hourly timestamp was absent; this does not imply no token activity for that interval. The warning policy and sanitized audit worked for this run, and the later high-water checkpoint stayed unchanged. This single pilot does not establish full coverage or authorize systematic backfill.

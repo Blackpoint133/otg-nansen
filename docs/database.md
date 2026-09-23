@@ -148,3 +148,5 @@ authorized live warning classified as `UNKNOWN`. Existing staging rows and
 data remain unchanged.
 
 Task 023F applies migration 004 to staging only. The exact previously observed warning is represented in source code only by its SHA-256 fingerprint, and accepted audit data contains only sanitized page/count/category summaries. Existing pre-capture audit rows remain NULL; new inspected warning-free runs use `[]`. Raw source warning text is never durable.
+
+Task 024 retained 167 one-hour Flows buckets for the single seven-day Avalanche `smart_money` window 2025-04-25 through 2025-05-01 UTC. Six existing daily buckets coexist with the hourly buckets under bucket-aware identity and kept the same key-set digest. The warning audit stored a sanitized summary, and the historical run did not move the later high-water checkpoint. Production was untouched. No broader backfill was performed.
