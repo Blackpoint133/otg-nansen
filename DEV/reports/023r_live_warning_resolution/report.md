@@ -201,3 +201,7 @@ the fingerprint and public schema field names only. Do not send or publish the
 raw warning. After authoritative semantic confirmation, continue with a
 separately authorized fingerprint pin and staging migration. Do not start
 historical backfill or Task 024.
+
+## Task 023F addendum
+
+Task 023R remains recorded as `WARNING_SEMANTICS_UNRESOLVED` under its stricter textual acceptance gate. Task 023F later adopted the exact fingerprint plus documented response-structure policy, without retaining warning wording. The one authorized Task 023F request matched the fingerprint and all four optional breakdown fields were null on every normalized result. Migration 004 was applied to staging after the source commit was pushed; production remains untouched.

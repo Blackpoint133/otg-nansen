@@ -261,3 +261,7 @@ establish that the warning itself referred to the non-exchange condition, so
 Task 023R stopped with `WARNING_SEMANTICS_UNRESOLVED`. The speculative regex
 allowlist remains unchanged at the published baseline; no fingerprint was
 pinned, no database was contacted, and migration 004 remains unapplied.
+
+## Task 023F addendum
+
+Task 023F later resolved the warning boundary with the exact previously recorded SHA-256 fingerprint, restricted to Flows `smart_money` and a mandatory all-null guard for the four optional CEX/DEX breakdown fields across normalized rows. One authorized post-change request passed the fingerprint, category, final-page, and structural checks. Migration 004 was subsequently applied to staging only; all legacy warning audit values remain NULL. The Task 023 initial `LIVE_WARNING_CONTRACT_MISMATCH` remains the original outcome.
