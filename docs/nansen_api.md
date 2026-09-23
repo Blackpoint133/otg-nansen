@@ -162,6 +162,12 @@ checkpoint were verified together, while the original Task 018 failed audit
 was retained. This is evidence for this single window only, not a general
 historical-coverage claim.
 
+Task 019 replayed the same exact bounded window once. It again returned 23
+records; persisted row count and sorted flow-key-set digest stayed stable,
+with no duplicate keys. This demonstrates live idempotency for this one
+retained window only. It does not establish broad historical idempotency or
+revision reconciliation behavior.
+
 ## Not verified
 
 The account plan, exact credit balance, endpoint-specific maximum historical

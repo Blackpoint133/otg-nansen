@@ -69,3 +69,10 @@ validation found 23 unique complete in-window flow rows, a successful audit,
 and the checkpoint referencing that run and window end. The first failed
 Task 018 audit remains preserved. This does not authorize another window,
 endpoint, chain, or historical backfill.
+
+Task 019 replayed the same retained Avalanche `$GUN` `smart_money` day once.
+The flow-key set digest and row count were stable (23 unique rows, no
+duplicates), while a new successful audit became the checkpoint's referenced
+run at the same window end. Earlier failed/successful audit history was
+preserved. This narrow replay is not evidence for broader historical replay
+or source-revision reconciliation.

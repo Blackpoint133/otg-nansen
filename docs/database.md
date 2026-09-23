@@ -114,3 +114,10 @@ references the exact requested window end. Two inflow rows retain fractional
 NUMERIC values; no outflow rows were fractional. This is one bounded window,
 not broader historical coverage. The original failed Task 018 audit remains
 alongside the successful retry audit. Production remains untouched.
+
+Task 019 replayed this same retained window once through the orchestrator.
+The target remained 23 rows with 23 distinct flow keys, and the sorted flow
+key set digest was unchanged. No duplicates were created. The checkpoint
+timestamp stayed at the requested window end and now references the successful
+replay audit; the earlier failed and successful run audits remain intact.
+This validates idempotency only for this retained window.
