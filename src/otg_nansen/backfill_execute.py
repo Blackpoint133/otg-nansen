@@ -7,12 +7,12 @@ read-only and refuses live execution. Each unit gets a fresh one-attempt client.
 from __future__ import annotations
 
 import argparse
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
-from typing import Any
+from typing import Any, Hashable, Iterable, Mapping
 
 from .backfill import (
     BackfillExecutionError,
@@ -35,6 +35,112 @@ from .source_warnings import NON_EXCHANGE_BREAKDOWN_UNAVAILABLE
 
 class SourceCoverageGap(BackfillExecutionError):
     """A successfully committed unit failed required structural coverage."""
+
+
+@dataclass(frozen=True)
+class RecentIdentityTransition:
+    preexisting_preserved: bool
+    new_identity_count: int
+    new_identities_authorized: bool
+    duplicate_count: int
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.utcoffset() is None:
+        raise BackfillExecutionError("checkpoint timestamps must be timezone-aware")
+    return value.astimezone(timezone.utc)
+
+
+def _valid_checkpoint_owner(
+    owner: Mapping[str, Any] | None,
+    *,
+    chain: str,
+    token_address: str,
+    flow_label: str,
+    checkpoint_timestamp: datetime,
+) -> bool:
+    if owner is None:
+        return False
+    owner_end = owner.get("window_end")
+    return (
+        owner.get("status") == "success"
+        and owner.get("chain") == chain
+        and owner.get("endpoint") == "flows"
+        and isinstance(owner.get("token_address"), str)
+        and owner["token_address"].lower() == token_address.lower()
+        and owner.get("flow_label") == flow_label
+        and isinstance(owner_end, datetime)
+        and _as_utc(owner_end) == _as_utc(checkpoint_timestamp)
+    )
+
+
+def validate_checkpoint_transition(
+    before: tuple[datetime, str] | None,
+    after: tuple[datetime, str] | None,
+    owner: Mapping[str, Any] | None,
+    *,
+    chain: str,
+    token_address: str,
+    flow_label: str,
+) -> bool:
+    """Validate monotonic checkpoint time and any changed/advanced owner."""
+    if after is None:
+        raise BackfillExecutionError("checkpoint disappeared")
+    after_time, after_run_id = after
+    if before is not None:
+        before_time, before_run_id = before
+        if _as_utc(after_time) < _as_utc(before_time):
+            raise BackfillExecutionError("checkpoint timestamp regressed")
+        owner_must_be_valid = (
+            _as_utc(after_time) > _as_utc(before_time)
+            or after_run_id != before_run_id
+        )
+    else:
+        owner_must_be_valid = True
+    if owner_must_be_valid and not _valid_checkpoint_owner(
+        owner,
+        chain=chain,
+        token_address=token_address,
+        flow_label=flow_label,
+        checkpoint_timestamp=after_time,
+    ):
+        raise BackfillExecutionError("checkpoint owner is not a matching successful run")
+    return True
+
+
+def validate_recent_identity_transition(
+    before_identities: Iterable[Hashable],
+    after_identities: Iterable[Hashable],
+    selected_desired_identities: Iterable[Hashable],
+) -> RecentIdentityTransition:
+    """Require old recent identities to remain and new ones to be authorized."""
+    before_rows = tuple(before_identities)
+    after_rows = tuple(after_identities)
+    before_set = set(before_rows)
+    after_set = set(after_rows)
+    desired_set = set(selected_desired_identities)
+    duplicates = len(after_rows) - len(after_set)
+    added = after_set - before_set
+    result = RecentIdentityTransition(
+        preexisting_preserved=before_set <= after_set,
+        new_identity_count=len(added),
+        new_identities_authorized=added <= desired_set,
+        duplicate_count=duplicates,
+    )
+    if not result.preexisting_preserved:
+        raise BackfillExecutionError("pre-existing recent identities were removed")
+    if not result.new_identities_authorized:
+        raise BackfillExecutionError("unexpected recent identities appeared")
+    if result.duplicate_count:
+        raise BackfillExecutionError("duplicate recent identities were observed")
+    return result
+
+
+def expected_next_pending_index(selected_units, plan) -> int | None:
+    if not selected_units:
+        return None
+    last_index = selected_units[-1].index
+    return None if last_index == plan.units[-1].index else last_index + 1
 
 
 ABSOLUTE_MAX_UNITS_PER_INVOCATION = 20
@@ -233,6 +339,31 @@ def _checkpoint(connection):
     return row
 
 
+def _checkpoint_owner(connection, run_id: str | None) -> dict[str, Any] | None:
+    if run_id is None:
+        return None
+    row = connection.execute(
+        """SELECT status, chain, endpoint, token_address, flow_label, window_end
+           FROM nansen.ingestion_runs WHERE run_id=%s""",
+        (run_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return dict(zip(("status", "chain", "endpoint", "token_address", "flow_label", "window_end"), row))
+
+
+def _recent_hourly_identities(connection, plan) -> list[tuple[datetime, datetime]]:
+    rows = connection.execute(
+        """SELECT date, bucket_end FROM nansen.flows
+           WHERE chain=%s AND token_address=%s AND flow_label=%s
+             AND date >= %s AND date < %s AND bucket_end-date=interval '1 hour'
+           ORDER BY date, bucket_end""",
+        (plan.chain, plan.token_address, plan.flow_label,
+         datetime(2026, 9, 20, tzinfo=timezone.utc), datetime(2026, 9, 21, tzinfo=timezone.utc)),
+    ).fetchall()
+    return [_utc_identity(row[0], row[1]) for row in rows]
+
+
 def _validate_unit_readonly(unit, run_id: str) -> dict[str, Any]:
     connection = _readonly_connection()
     try:
@@ -346,13 +477,7 @@ def main(argv=None) -> int:
         before_rows, before_duplicates = _global_rows(connection)
         audit_count_before = _audit_count(connection)
         checkpoint_before = _checkpoint(connection)
-        recent = connection.execute(
-            """SELECT count(*), count(DISTINCT (chain,token_address,flow_label,date,bucket_end))
-               FROM nansen.flows WHERE chain=%s AND token_address=%s AND flow_label=%s
-                 AND date >= %s AND date < %s AND bucket_end-date=interval '1 hour'""",
-            (plan.chain, plan.token_address, plan.flow_label,
-             datetime(2026, 9, 20, tzinfo=timezone.utc), datetime(2026, 9, 21, tzinfo=timezone.utc)),
-        ).fetchone()
+        recent_before = _recent_hourly_identities(connection, plan)
     finally:
         connection.close()
     print(f"PLAN_COMPLETE_BEFORE={progress.complete}")
@@ -362,8 +487,8 @@ def main(argv=None) -> int:
     print(f"CANONICAL_TARGET_HOURLY_ROWS_BEFORE={canonical_counts['hourly']}")
     print(f"CANONICAL_TARGET_DAILY_ROWS_BEFORE={canonical_counts['daily']}")
     print(f"INGESTION_RUN_ROWS_BEFORE={audit_count_before}")
-    print(f"RECENT_HOURLY_ROWS_BEFORE={recent[0]}")
-    print(f"RECENT_HOURLY_IDENTITIES_BEFORE={recent[1]}")
+    print(f"RECENT_HOURLY_ROWS_BEFORE={len(recent_before)}")
+    print(f"RECENT_HOURLY_IDENTITIES_BEFORE={len(set(recent_before))}")
     print(f"CHECKPOINT_BEFORE={json.dumps((_utc_wire(checkpoint_before[0]), checkpoint_before[1]) if checkpoint_before else None)}")
     if before_duplicates:
         print("EXECUTION_REFUSED=GLOBAL_NATURAL_IDENTITY_DUPLICATES")
@@ -401,8 +526,8 @@ def main(argv=None) -> int:
             or canonical_counts["hourly"] != args.expected_hourly_rows_before
             or canonical_counts["daily"] != args.expected_daily_rows_before
             or audit_count_before != args.expected_ingestion_runs_before
-            or recent[0] != args.expected_recent_hourly_rows_before
-            or recent[1] != args.expected_recent_hourly_rows_before
+            or len(recent_before) != args.expected_recent_hourly_rows_before
+            or len(set(recent_before)) != args.expected_recent_hourly_rows_before
             or checkpoint_before is None
             or _utc_wire(checkpoint_before[0]) != args.expected_checkpoint_timestamp
             or checkpoint_before[1] != args.expected_checkpoint_run_id):
@@ -504,6 +629,7 @@ def main(argv=None) -> int:
             after_rows, after_duplicates = _global_rows(fresh)
             audit_count_after = _audit_count(fresh)
             checkpoint_after = _checkpoint(fresh)
+            checkpoint_owner = _checkpoint_owner(fresh, checkpoint_after[1] if checkpoint_after else None)
             present_before = before_counts["hourly_identities"] & before_counts["desired_identities"]
             present_after = after_counts["hourly_identities"] & after_counts["desired_identities"]
             missing_after = after_counts["desired_identities"] - after_counts["hourly_identities"]
@@ -533,12 +659,26 @@ def main(argv=None) -> int:
             next_index = first_pending_index(final_plan, final_progress.statuses)
             print(f"RESTART_RESUME_NEXT_UNIT={next_index if next_index is not None else 'NONE'}")
             print(f"CHECKPOINT_AFTER={json.dumps((_utc_wire(checkpoint_after[0]), checkpoint_after[1]) if checkpoint_after else None)}")
-            print(f"CHECKPOINT_NON_REGRESSION={checkpoint_after == checkpoint_before}")
+            checkpoint_valid = validate_checkpoint_transition(
+                checkpoint_before,
+                checkpoint_after,
+                checkpoint_owner,
+                chain=final_plan.chain,
+                token_address=final_plan.token_address,
+                flow_label=final_plan.flow_label,
+            )
+            owner_check_required = (
+                checkpoint_before is None
+                or _as_utc(checkpoint_after[0]) > _as_utc(checkpoint_before[0])
+                or checkpoint_after[1] != checkpoint_before[1]
+            )
+            print(f"CHECKPOINT_TIMESTAMP_NON_REGRESSION={checkpoint_valid}")
+            print(f"CHECKPOINT_OWNER_VALID={'PASS' if owner_check_required else 'UNCHANGED'}")
             print(f"NEW_RUNS_WITH_WARNING_AUDIT={sum(1 for d in completed_details.values() if d['audit_valid'])}")
             print("NEW_RUNS_WITH_NULL_WARNING_AUDIT=0")
             print("NEW_RUNS_WITH_UNKNOWN_CATEGORY=0")
             expected_final_progress = expected_progress_after(progress, successful_units)
-            expected_next_index = selected[-1].index + 1
+            expected_next_index = expected_next_pending_index(selected, final_plan)
             if (final_progress.complete, final_progress.pending, final_progress.ambiguous) != expected_final_progress:
                 raise BackfillExecutionError("final audit progress differs from dynamic batch expectation")
             if len(present_after) != len(after_counts["desired_identities"]) or missing_after:
@@ -549,22 +689,24 @@ def main(argv=None) -> int:
                 raise BackfillExecutionError("global flow row accounting did not match new identities")
             if audit_count_after != audit_count_before + successful_units:
                 raise BackfillExecutionError("audit run count did not increase by successful unit count")
-            if checkpoint_after != checkpoint_before:
-                raise BackfillExecutionError("historical batch changed the high-water checkpoint")
+            if not checkpoint_valid:
+                raise BackfillExecutionError("high-water checkpoint timestamp regressed or owner is invalid")
             if next_index != expected_next_index:
                 raise BackfillExecutionError("restart resume did not select the next contiguous unit")
-            recent_after = fresh.execute(
-                """SELECT count(*), count(DISTINCT (chain,token_address,flow_label,date,bucket_end))
-                   FROM nansen.flows WHERE chain=%s AND token_address=%s AND flow_label=%s
-                     AND date >= %s AND date < %s AND bucket_end-date=interval '1 hour'""",
-                (final_plan.chain, final_plan.token_address, final_plan.flow_label,
-                 datetime(2026, 9, 20, tzinfo=timezone.utc), datetime(2026, 9, 21, tzinfo=timezone.utc)),
-            ).fetchone()
-            if recent_after != recent:
-                raise BackfillExecutionError("recent September retained state changed")
-            print(f"RECENT_RETAINED_HOURLY_ROWS_AFTER={recent_after[0]}")
-            print(f"RECENT_RETAINED_HOURLY_IDENTITIES_AFTER={recent_after[1]}")
-            print("RECENT_RETAINED_STATE_UNCHANGED=PASS")
+            recent_after = _recent_hourly_identities(fresh, final_plan)
+            recent_start = datetime(2026, 9, 20, tzinfo=timezone.utc)
+            recent_end = datetime(2026, 9, 21, tzinfo=timezone.utc)
+            authorized_recent = {
+                identity for identity in after_counts["desired_identities"]
+                if recent_start <= identity[0] < recent_end
+            }
+            recent_validation = validate_recent_identity_transition(
+                recent_before, recent_after, authorized_recent
+            )
+            print(f"RECENT_PREEXISTING_IDENTITIES_PRESERVED={recent_validation.preexisting_preserved}")
+            print(f"RECENT_NEW_IDENTITIES_COUNT={recent_validation.new_identity_count}")
+            print(f"RECENT_NEW_IDENTITIES_AUTHORIZED={recent_validation.new_identities_authorized}")
+            print(f"RECENT_IDENTITY_DUPLICATES={recent_validation.duplicate_count}")
             print("RESTART_RESUME_PROOF=PASS")
             print(format_batch_status("SUCCESS"))
             _resource_snapshot("AFTER_BATCH")

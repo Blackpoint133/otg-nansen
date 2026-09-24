@@ -10,6 +10,7 @@ from otg_nansen.backfill import (
 from otg_nansen.backfill_execute import (
     ABSOLUTE_MAX_LIVE_CALLS_PER_INVOCATION,
     ABSOLUTE_MAX_UNITS_PER_INVOCATION,
+    expected_next_pending_index,
     format_batch_status,
     expected_progress_after,
     execution_enabled,
@@ -17,6 +18,8 @@ from otg_nansen.backfill_execute import (
     _utc_identity,
     select_authorized_units,
     should_stop_for_resource_pressure,
+    validate_checkpoint_transition,
+    validate_recent_identity_transition,
     _utc_wire,
     validate_invocation_limits,
 )
@@ -159,3 +162,105 @@ def test_executor_stops_after_first_failure_in_resumed_plan():
     with pytest.raises(RuntimeError, match="synthetic stop"):
         execute_pending_units(plan, states, max_units=10, max_live_calls=10, execute_unit=callback)
     assert attempted == [4, 5]
+
+
+def _checkpoint_owner(*, status="success", chain="avalanche", endpoint="flows",
+                      token_address=None, flow_label="smart_money", window_end=None):
+    plan = build_canonical_plan()
+    return {
+        "status": status,
+        "chain": chain,
+        "endpoint": endpoint,
+        "token_address": token_address or plan.token_address,
+        "flow_label": flow_label,
+        "window_end": window_end or datetime(2026, 9, 20, 23, 59, 59, tzinfo=timezone.utc),
+    }
+
+
+def test_checkpoint_unchanged_timestamp_and_owner_passes():
+    timestamp = datetime(2026, 9, 20, 23, 59, 59, tzinfo=timezone.utc)
+    assert validate_checkpoint_transition(
+        (timestamp, "same-run"), (timestamp, "same-run"), None,
+        chain="avalanche", token_address=build_canonical_plan().token_address,
+        flow_label="smart_money",
+    )
+
+
+def test_checkpoint_advanced_timestamp_requires_matching_success_owner():
+    before = datetime(2026, 9, 20, 22, 59, 59, tzinfo=timezone.utc)
+    after = datetime(2026, 9, 20, 23, 59, 59, tzinfo=timezone.utc)
+    assert validate_checkpoint_transition(
+        (before, "old"), (after, "new"), _checkpoint_owner(window_end=after),
+        chain="avalanche", token_address=build_canonical_plan().token_address,
+        flow_label="smart_money",
+    )
+
+
+def test_checkpoint_equal_timestamp_accepts_valid_owner_replacement():
+    timestamp = datetime(2026, 9, 20, 23, 59, 59, tzinfo=timezone.utc)
+    assert validate_checkpoint_transition(
+        (timestamp, "old"), (timestamp, "new"), _checkpoint_owner(window_end=timestamp),
+        chain="avalanche", token_address=build_canonical_plan().token_address,
+        flow_label="smart_money",
+    )
+
+
+def test_checkpoint_timestamp_regression_fails_even_if_owner_changes():
+    before = datetime(2026, 9, 20, 23, 59, 59, tzinfo=timezone.utc)
+    after = before - timedelta(seconds=1)
+    with pytest.raises(BackfillExecutionError, match="regressed"):
+        validate_checkpoint_transition(
+            (before, "old"), (after, "new"), _checkpoint_owner(window_end=after),
+            chain="avalanche", token_address=build_canonical_plan().token_address,
+            flow_label="smart_money",
+        )
+
+
+@pytest.mark.parametrize("owner", [
+    _checkpoint_owner(status="failed"),
+    _checkpoint_owner(chain="solana"),
+    _checkpoint_owner(window_end=datetime(2026, 9, 20, 22, 59, 59, tzinfo=timezone.utc)),
+])
+def test_checkpoint_owner_replacement_rejects_failed_wrong_stream_or_window(owner):
+    timestamp = datetime(2026, 9, 20, 23, 59, 59, tzinfo=timezone.utc)
+    with pytest.raises(BackfillExecutionError, match="owner"):
+        validate_checkpoint_transition(
+            (timestamp, "old"), (timestamp, "new"), owner,
+            chain="avalanche", token_address=build_canonical_plan().token_address,
+            flow_label="smart_money",
+        )
+
+
+def test_recent_identity_transition_accepts_unchanged_and_authorized_sets():
+    old = ("old-a", "old-b")
+    added = "selected-desired-recent-id"
+    unchanged = validate_recent_identity_transition(old, old, ())
+    assert unchanged.preexisting_preserved and unchanged.new_identity_count == 0
+    result = validate_recent_identity_transition(old, (*old, added), (added,))
+    assert result.preexisting_preserved
+    assert result.new_identity_count == 1
+    assert result.new_identities_authorized
+    assert result.duplicate_count == 0
+
+
+def test_recent_identity_transition_rejects_removed_preexisting_identity():
+    with pytest.raises(BackfillExecutionError, match="removed"):
+        validate_recent_identity_transition(("old-a", "old-b"), ("old-a",), ())
+
+
+def test_recent_identity_transition_rejects_unselected_new_identity():
+    with pytest.raises(BackfillExecutionError, match="unexpected"):
+        validate_recent_identity_transition(("old",), ("old", "new"), ())
+
+
+def test_recent_identity_transition_rejects_duplicate_natural_identity():
+    with pytest.raises(BackfillExecutionError, match="duplicate"):
+        validate_recent_identity_transition(("old",), ("old", "old"), ())
+
+
+def test_terminal_resume_expectation_accepts_none_after_final_plan_unit():
+    plan = build_canonical_plan()
+    assert expected_next_pending_index(plan.units[4:5], plan) == 6
+    assert expected_next_pending_index(plan.units[-1:], plan) is None
+    completed = _progress(plan, complete=len(plan.units))
+    assert first_pending_index(plan, completed.statuses) is None
