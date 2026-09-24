@@ -85,3 +85,9 @@ The report contains only repository metadata, aggregate counts, and the accepted
 ## NEXT_ACTION
 
 If the analytics foundation is still required, authorize a fresh bounded builder execution separately. The committed staging-writer fix is present, but the empty tables require a new source read and overlap-resolution pass. Do not infer successful persistence or idempotency from the in-memory digests in the earlier interrupted run.
+
+## FOLLOW_UP_VERIFICATION
+
+A later authentication check completed `git fetch origin` successfully and `git push --dry-run origin HEAD:refs/heads/codex-auth-check` exited successfully without performing a push. On the subsequent Task 033R2 reconciliation, the fetched `origin/main` was `f8796d4b2cadb3500c9603bf097d92480cb990e2`, not the older `ef3d21087ee3d1def39cef2e3b0033c5bac6bc6e` stated in the request. It already contained this report; local and remote were synchronized (ahead/behind 0/0), with no local-only commits or uncommitted files before this addendum.
+
+The offline suite was rerun and reported 253 passed, 6 skipped. A fresh staging read-only check again found both analytics tables present with 0 rows and NULL hour bounds. The Nansen source remained at 12,336 hourly rows and 29 daily rows with the accepted identity digest. No production connection, analytics builder, Nansen API call, or on-chain RPC call was made. Production DDL/DML and staging DDL/DML remained zero.
