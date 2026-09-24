@@ -125,3 +125,7 @@ Task 030D inspected the two unit 46 failed audits: both are `NansenHTTPError` wi
 ## Task 030K recovery addendum
 
 The operator replaced the local API key. Task 030K made one separately authorized unit 46 attempt through the committed runner; it succeeded with a valid warning-audited exact-window run and 167/167 desired hourly identities. The prior incomplete Task 030 and Task 030R history remains unchanged. Unit 47 was not executed; progress is now 46 complete / 28 pending / 0 ambiguous.
+
+## Task 030F completion addendum
+
+After Task 030K completed unit 46, Task 030F executed only units 47–53. All seven succeeded with one API call each and 167/167 desired hourly identities. The original Task 030 range, units 34–53, now has 3,340/3,340 desired identities and 20 successful unit audits; the two historical failed unit 46 audits remain preserved. Progress is 53 complete / 21 pending / 0 ambiguous, unit 54 is next, and the high-water checkpoint remains unchanged. Production was untouched.
