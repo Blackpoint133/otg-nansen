@@ -74,3 +74,38 @@ Task 031 completed desired hourly coverage for units 54-73: 3,340 of 3,340 plann
 Task 032 completed the canonical structural hourly target: all 12,336 expected starts from 2025-04-25T00:00:00Z through 2026-09-20T23:00:00Z are present, contiguous, and unique. This establishes ingestion coverage only; it does not establish activity for absent source intervals beyond the returned records or any market-reaction relationship. The 29-row daily layer remains present. Production was untouched.
 
 Task 032R reverified the complete staging structure: 12,336 canonical hourly identities, contiguous at one-hour intervals, with no gaps, unexpected identities, duplicates, or incomplete hourly rows. This remains an ingestion coverage result only and makes no claim about market reaction or causality. The current 29-row daily identity digest is now recorded as a future non-regression baseline.
+# Task 033 defines a descriptive hourly data foundation only. The market row
+# semantic is `marketplace_trade_event_transaction`: one parser row keyed by
+# transaction hash and supported by the accepted Trade-event evidence. It is
+# not a line-item count or independent settlement/finality claim.
+#
+# Stored sales times before 2026-02-27 22:08:18 are reconstructed with fixed
+# UTC+05:00. Times at or after 2026-02-28 11:09:10 use
+# `America/Los_Angeles`. All timestamps in the conservative interval between
+# those bounds are mapped from the containing GUNZ block. The accepted
+# 5,632-row mapping digest is
+# `08e64456eea3796ce0e1cfa3b475e2ac66f98050cf91ed99fcb6704a290feca6`; a
+# mismatched population or digest stops the build before staging data writes.
+#
+# The analytics spine includes every hour from 2025-04-25T00:00:00Z through
+# 2026-09-20T23:00:00Z, including zero-activity market hours. Market amount is
+# the parser-recorded native GUN Trade amount in `public.sales.price`, whose
+# fractional native GUN component was truncated by the source parser. This
+# series is kept numerically separate from Avalanche Nansen token values; no
+# bridge ratio is applied. No transaction-time market USD value is available,
+# so no market USD volume is created.
+#
+# Nansen lineage is limited to hourly `price_usd`, `token_amount`, `value_usd`,
+# `holders_count`, `total_inflows_count`, and `total_outflows_count`. CEX/DEX
+# breakdown fields are omitted because the accepted source warning says they
+# are unavailable for this label. Price return is current price divided by the
+# lagged 1/6/24-hour price minus one, and is NULL when either price is NULL or
+# the lagged denominator is zero. Flow count imbalance and total are arithmetic
+# difference and sum. Market transaction/native amount features are absolute
+# 1/6/24-hour deltas. No zero denominator is capped and no source observation
+# is forward-filled.
+#
+# The build persists only aggregate rows in staging and uses deterministic
+# row-content SHA-256 digests excluding generated timestamps. This foundation
+# supports later separately reviewed descriptive analysis; it contains no
+# correlation, event-study, causal, or predictive result.

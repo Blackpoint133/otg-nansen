@@ -131,3 +131,13 @@ Task 031 used the committed staging-only runner for units 54-73, with one API at
 Task 032 used the committed staging runner for the single pending unit 74 with a one-call budget and no retry. The successful run is warning-audited and all 145 desired identities are present. Fresh read-only validation reports 74 complete / 0 pending / 0 ambiguous and confirms full contiguous 12,336-hour coverage. The runner's final tuple-equality checkpoint check printed a failure because equal-timestamp ownership moved to the new run; the checkpoint timestamp itself did not regress, consistent with the accepted equal-timestamp policy. No source change was made. Unit 74 was the final canonical request; production was untouched.
 
 Task 032R fixed and tested runner terminal checks without live calls or staging writes. Checkpoint timestamp regression is rejected; when an owner changes or the timestamp advances, the owner must be a successful matching stream run whose window ends at the checkpoint. Recent identities must be preserved, duplicate-free, and any new identity must be desired by the selected units. The final unit may leave no next pending index. The completed plan verifies as 74/0/0; no analytical task was started.
+# Task 033's operational path is source-first: review and push code, migration,
+# tests, and runbook before applying any staging migration or data replacement.
+# `python -m otg_nansen.analytics_build --execute` pins source reads to
+# `server_otg` (transaction read-only) and analytics writes to
+# `server_otg_staging`. It verifies the canonical Nansen identity digest,
+# resolves the 5,632-row timestamp overlap through read-only GUNZ RPC, requires
+# the accepted overlap digest, aggregates and aligns all 12,336 UTC hours, then
+# atomically replaces only the two analytics snapshots. The same in-memory
+# snapshot is written and read back twice to verify persistence idempotency;
+# the second pass makes no RPC call. No Nansen request is part of this build.

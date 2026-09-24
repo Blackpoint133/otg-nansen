@@ -94,3 +94,9 @@ Task 031 completed canonical units 54-73 with 20 bounded staging requests. The b
 Task 032 completed canonical unit 74 with one authorized request. The full 12,336-hour Avalanche smart_money target is present and contiguous, with matching expected/observed identity digests, zero missing or duplicate hourly identities, and 74 successful warning-audited unit runs. The 29-row daily layer remains present. The checkpoint timestamp remains 2026-09-20T23:59:59Z; its owner is the successful unit 74 run at the equal timestamp. September 20 now contains 24 hourly identities because the final canonical 23:00 bucket was added; its prior 23 identities remain. Production was untouched.
 
 Task 032R corrects generic runner terminal validation. Checkpoint non-regression compares timestamps; an equal-timestamp owner replacement is accepted only when its run is a successful matching stream audit ending at that timestamp. Recent-window checks preserve the prior identity set and allow new identities only when selected units planned them. A completed final plan validly has no next pending unit. Read-only staging verification confirms 74/0/0 and complete 12,336/12,336 hourly coverage. Current full daily identity digest is recorded in the Task 032R report as the baseline for future checks.
+# Task 033 adds a staging-only hourly analytics layer. A pinned read-only
+# `server_otg` reader aggregates parser-backed marketplace Trade-event
+# transactions, and the verified Avalanche Nansen hourly source is aligned to
+# a full canonical UTC spine. `server_otg_staging` alone owns the two derived
+# snapshot tables. Production rows and wallet/transaction identifiers are not
+# copied to staging.

@@ -172,3 +172,17 @@ Task 031 added 3,340 hourly flow identities for canonical units 54-73. Staging n
 Task 032 completed unit 74. Read-only validation found 12,336 canonical hourly rows for 12,336 expected identities, zero missing/unexpected/duplicate identities, zero non-hourly gaps, and zero incomplete records. The 29 canonical daily rows remain present; the final request range did not overlap that historical daily layer. Global flow total is 12,365, with zero natural-identity duplicates. The checkpoint timestamp stayed at 2026-09-20T23:59:59Z; equal-timestamp ownership moved to the unit 74 success run. The prior 23 September 20 identities remain and the newly required 23:00 target makes 24 rows for that date. Production was untouched.
 
 Task 032R performed read-only physical verification only. Staging remains at 12,365 total flows: 12,336 canonical hourly and 29 daily, with 81 ingestion runs and zero global natural-identity duplicates. The canonical plan is 74 complete / 0 pending / 0 ambiguous. The current full 29-row daily natural-identity digest is recorded in the Task 032R report as a future baseline; Task 032 did not capture that full digest before unit 74.
+# Task 033 introduces `nansen.otg_market_hourly` and
+# `nansen.otg_nansen_hourly` through migration 005 on `server_otg_staging` only.
+# Each table contains one row per canonical UTC hour and uses `hour_start` as
+# its primary key. The market table stores transaction counts, integer-
+# truncated native GUN amount aggregates, and distinct buyer/seller/item
+# counts; it stores no sale rows, wallet identifiers, transaction hashes, or
+# market USD value. The aligned table stores the same market aggregates beside
+# verified Nansen source fields and mechanically derived deltas/returns.
+#
+# The sales reader is pinned to `server_otg` and opens with
+# `default_transaction_read_only=on`; it verifies database identity and
+# `transaction_read_only=on` before querying. The analytics writer is pinned
+# to `server_otg_staging` and rejects any other database. The two source tables
+# `public.sales` and `nansen.flows` are never mutated by the builder.
