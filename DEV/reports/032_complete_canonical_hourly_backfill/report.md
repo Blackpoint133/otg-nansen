@@ -150,3 +150,7 @@ The reusable runner's strict checkpoint tuple equality reports failure when the 
 ## NEXT_RECOMMENDED_TASK
 
 The canonical staging backfill is complete. Review the checkpoint postcondition and the September 20 count convention before any later analytical task. Do not infer market relationships from coverage completion alone.
+
+## TASK032R_ADDENDUM
+
+Unit 74 persistence succeeded and canonical hourly coverage became complete. The original generic runner then emitted `BACKFILL_BATCH_STATUS=LIVE_BATCH_FAILURE` because terminal postconditions required exact checkpoint tuple equality, exact recent-day count equality, and a synthetic next index after the final unit. The API, audit, persistence, and canonical coverage checks had succeeded. Task 032R corrected these runner validation semantics and their offline tests without another Nansen call or staging write. Read-only physical verification again found the full 12,336/12,336 canonical identity set. The checkpoint timestamp remains unchanged while its valid owner is unit 74's successful run. September 20 has 24 rows: the documented prior count was 23 and the final canonical 23:00 bucket is the one authorized addition. The original report chronology and runner failure output are preserved.
