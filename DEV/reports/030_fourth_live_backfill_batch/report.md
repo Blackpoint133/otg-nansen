@@ -117,3 +117,7 @@ Unit 46's exact request failed twice, with one attempt per invocation. It remain
 ## NEXT_RECOMMENDED_TASK
 
 Investigate a safe classification for unit 46's API error and separately authorize continuation from the actual first pending unit. Do not execute unit 54 or later under this task.
+
+## Task 030D diagnostic addendum
+
+Task 030D inspected the two unit 46 failed audits: both are `NansenHTTPError` with HTTP 403, one API attempt and zero pages/records. Their exact summary SHA-256 values and safe semantic flags are recorded in the Task 030D report; raw summaries are not published. The stored summaries refer to insufficient credits. Current official Nansen documentation classifies 403 as Forbidden and the insufficient-credit condition as non-retryable; the client retry set also excludes 403. Therefore no third attempt was authorized or made. Unit 46 remains pending, and units 47–53 remain unattempted.
