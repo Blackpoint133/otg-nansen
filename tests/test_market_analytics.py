@@ -2,6 +2,8 @@ from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import re
+import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -195,6 +197,25 @@ def test_read_only_and_staging_database_guards():
     with pytest.raises(ma.AnalyticsContractError): ma.verify_connection_identity("server_otg_staging", "on", "server_otg")
     ma.verify_staging_writer_identity("server_otg_staging")
     with pytest.raises(ma.AnalyticsContractError): ma.verify_staging_writer_identity("server_otg")
+
+
+def test_staging_writer_connection_passes_pinned_kwargs(monkeypatch):
+    captured = {}
+
+    class FakeConnection:
+        def execute(self, sql):
+            assert sql == "SELECT current_database()"
+            return FakeFetch(("server_otg_staging",))
+
+    def connect(**kwargs):
+        captured.update(kwargs)
+        return FakeConnection()
+
+    monkeypatch.setitem(sys.modules, "psycopg", SimpleNamespace(connect=connect))
+    connection = ma.staging_writer_connection()
+    assert isinstance(connection, FakeConnection)
+    assert captured["dbname"] == "server_otg_staging"
+    assert captured["autocommit"] is True
 
 
 def test_zero_activity_hour_preserved_and_market_aggregate_values():

@@ -462,7 +462,7 @@ def staging_readonly_connection():
 def staging_writer_connection():
     import psycopg
 
-    connection = psycopg.connect(_env_postgres_kwargs("server_otg_staging"), autocommit=True)
+    connection = psycopg.connect(**_env_postgres_kwargs("server_otg_staging"), autocommit=True)
     database = connection.execute("SELECT current_database()").fetchone()[0]
     verify_staging_writer_identity(database)
     return connection
