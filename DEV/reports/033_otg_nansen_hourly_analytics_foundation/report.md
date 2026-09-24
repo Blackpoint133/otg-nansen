@@ -209,3 +209,9 @@ The authorized RPC cap was reached near its maximum before the writer defect was
 ## NEXT_RECOMMENDED_TASK
 
 Authorize a fresh bounded build pass of up to 10,519 read-only GUNZ RPC method objects. The source writer fix and migration are already pushed/applied; the next run should use `PYTHONPATH=src` (or an installed package), recreate and validate the overlap mapping, then populate/read back both staging snapshots and prove same-memory idempotency.
+
+## TASK_033R3_ADDENDUM
+
+Task 033R3 started from the synchronized main commit `13c8e05046b6f4a4e0a1ef8a12508548e517a23a`, with both analytics tables physically empty. Baseline tests passed (253 passed, 6 skipped). One fresh read-only GUNZ RPC campaign used 10,519 method objects and reproduced the accepted 5,632-row overlap contract, including digest `08e64456eea3796ce0e1cfa3b475e2ac66f98050cf91ed99fcb6704a290feca6`. The builder reconstructed the 12,336-hour market and aligned datasets; both in-memory digests reproduced the interrupted Task 033 values.
+
+Persistence then failed in `replace_analytics_snapshot`: the code invoked `connection.executemany`, but the psycopg `Connection` object has no such method. The exception path rolled back the snapshot transaction. Subsequent staging read-only inspection confirmed both analytics tables remain at 0 rows, while the Nansen source remains 12,336 hourly / 29 daily with its accepted identity digest. No second RPC campaign or source patch was made. This execution is not a successful physical build; a source repair and separately authorized new build are required.
