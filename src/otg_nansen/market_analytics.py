@@ -468,6 +468,43 @@ def staging_writer_connection():
     return connection
 
 
+def staging_writer_capability_preflight() -> dict[str, Any]:
+    """Prove the pinned staging writer and psycopg cursor are usable with SELECTs only."""
+    connection = staging_writer_connection()
+    try:
+        database = connection.execute("SELECT current_database()").fetchone()[0]
+        verify_staging_writer_identity(database)
+        transaction_read_only = connection.execute("SHOW transaction_read_only").fetchone()[0]
+        if transaction_read_only != "off":
+            raise AnalyticsContractError("staging writer is unexpectedly read-only")
+
+        with connection.cursor() as cursor:
+            executemany_available = callable(getattr(cursor, "executemany", None))
+            if not executemany_available:
+                raise AnalyticsContractError("staging cursor does not expose executemany")
+            cursor.execute("SELECT 1")
+            if cursor.fetchone()[0] != 1:
+                raise AnalyticsContractError("staging writer cursor SELECT self-check failed")
+            cursor.executemany("SELECT %s::integer", [(1,), (2,)])
+            market_exists = cursor.execute(
+                "SELECT to_regclass('nansen.otg_market_hourly') IS NOT NULL"
+            ).fetchone()[0]
+            aligned_exists = cursor.execute(
+                "SELECT to_regclass('nansen.otg_nansen_hourly') IS NOT NULL"
+            ).fetchone()[0]
+        if not market_exists or not aligned_exists:
+            raise AnalyticsContractError("staging analytics tables are missing")
+        return {
+            "database": database,
+            "transaction_read_only": transaction_read_only,
+            "cursor_executemany_available": executemany_available,
+            "market_table_exists": bool(market_exists),
+            "aligned_table_exists": bool(aligned_exists),
+        }
+    finally:
+        connection.close()
+
+
 def read_nansen_source(connection) -> tuple[dict[datetime, dict[str, Any]], str, int, int]:
     """Read and validate only canonical hourly rows, plus retained daily count."""
     hours = utc_hour_spine()
@@ -594,14 +631,15 @@ def replace_analytics_snapshot(connection, market_rows: Sequence[Mapping[str, An
         with connection.transaction():
             connection.execute("DELETE FROM nansen.otg_nansen_hourly")
             connection.execute("DELETE FROM nansen.otg_market_hourly")
-            connection.executemany(
-                """INSERT INTO nansen.otg_market_hourly
+            with connection.cursor() as cursor:
+                cursor.executemany(
+                    """INSERT INTO nansen.otg_market_hourly
                    (hour_start,hour_end,trade_tx_count,native_gun_amount_truncated,unique_buyers,unique_sellers,unique_items)
                    VALUES (%(hour_start)s,%(hour_end)s,%(trade_tx_count)s,%(native_gun_amount_truncated)s,%(unique_buyers)s,%(unique_sellers)s,%(unique_items)s)""",
-                market_rows,
-            )
-            connection.executemany(
-                """INSERT INTO nansen.otg_nansen_hourly
+                    market_rows,
+                )
+                cursor.executemany(
+                    """INSERT INTO nansen.otg_nansen_hourly
                    (hour_start,hour_end,market_trade_tx_count,market_native_gun_amount_truncated,market_unique_buyers,
                     market_unique_sellers,market_unique_items,nansen_price_usd,nansen_token_amount,nansen_value_usd,
                     nansen_holders_count,nansen_total_inflows_count,nansen_total_outflows_count,gun_price_return_1h,
@@ -613,8 +651,8 @@ def replace_analytics_snapshot(connection, market_rows: Sequence[Mapping[str, An
                     %(nansen_total_outflows_count)s,%(gun_price_return_1h)s,%(gun_price_return_6h)s,%(gun_price_return_24h)s,
                     %(flow_count_imbalance)s,%(flow_count_total)s,%(trade_tx_delta_1h)s,%(trade_tx_delta_6h)s,
                     %(trade_tx_delta_24h)s,%(native_gun_delta_1h)s,%(native_gun_delta_6h)s,%(native_gun_delta_24h)s)""",
-                aligned_rows,
-            )
+                    aligned_rows,
+                )
     except Exception:
         connection.rollback()
         raise

@@ -26,6 +26,7 @@ from .market_analytics import (
     replace_analytics_snapshot,
     resolve_overlap_rows,
     staging_readonly_connection,
+    staging_writer_capability_preflight,
     staging_writer_connection,
     utc_hour_spine,
 )
@@ -90,6 +91,15 @@ def build_snapshot() -> dict[str, Any]:
 
     production = production_readonly_connection()
     try:
+        # The real staging write path must be capable before the expensive overlap RPC campaign.
+        writer_check = staging_writer_capability_preflight()
+        print("WRITER_PREFLIGHT_BEFORE_RPC=YES")
+        print("STAGING_WRITER_PREFLIGHT=PASS")
+        print(f"STAGING_WRITER_DATABASE={writer_check['database']}")
+        print(f"STAGING_WRITER_TRANSACTION_READ_ONLY={writer_check['transaction_read_only']}")
+        print(f"STAGING_CURSOR_EXECUTEMANY_AVAILABLE={'YES' if writer_check['cursor_executemany_available'] else 'NO'}")
+        print(f"MARKET_TABLE_EXISTS={'YES' if writer_check['market_table_exists'] else 'NO'}")
+        print(f"ALIGNED_TABLE_EXISTS={'YES' if writer_check['aligned_table_exists'] else 'NO'}")
         overlap_rows = load_overlap_rows(production)
         print(f"OVERLAP_ROWS={len(overlap_rows)}")
         rpc_url = os.getenv("GUNZ_READ_RPC_URL", "https://subnets.avax.network/gunzilla/mainnet/rpc")

@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from otg_nansen import market_analytics as ma
+from otg_nansen import analytics_build as ab
 
 UTC = timezone.utc
 
@@ -291,17 +292,39 @@ class FakeWriter:
         self.database, self.read_only = database, read_only
         self.deletes = []
         self.inserted = {"market": 0, "aligned": 0}
+        self.closed = False
+        self.rollback_calls = 0
+        self.fail_on_aligned_insert = False
     def execute(self, sql):
         if sql == "SELECT current_database()": return FakeFetch((self.database,))
         if sql == "SHOW transaction_read_only": return FakeFetch((self.read_only,))
         if sql.startswith("DELETE FROM"):
             self.deletes.append(sql)
         return FakeFetch(None)
-    def executemany(self, sql, rows):
-        bucket = "market" if "otg_market_hourly" in sql else "aligned"
-        self.inserted[bucket] += len(rows)
+    def cursor(self): return FakeCursor(self)
     def transaction(self): return nullcontext()
-    def rollback(self): pass
+    def rollback(self): self.rollback_calls += 1
+    def close(self): self.closed = True
+
+
+class FakeCursor:
+    def __init__(self, writer): self.writer, self.closed = writer, False
+    def __enter__(self): return self
+    def __exit__(self, *_): self.closed = True
+    def execute(self, sql):
+        if sql == "SELECT 1": return FakeFetch((1,))
+        if "otg_market_hourly" in sql: return FakeFetch((True,))
+        if "otg_nansen_hourly" in sql: return FakeFetch((True,))
+        return FakeFetch(None)
+    def fetchone(self): return (True,)
+    def executemany(self, sql, rows):
+        if sql.startswith("SELECT"):
+            assert list(rows) == [(1,), (2,)]
+            return
+        bucket = "market" if "otg_market_hourly" in sql else "aligned"
+        if bucket == "aligned" and self.writer.fail_on_aligned_insert:
+            raise RuntimeError("synthetic cursor bulk failure")
+        self.writer.inserted[bucket] += len(rows)
 
 
 class FakeFetch:
@@ -316,8 +339,86 @@ def test_atomic_staging_replacement_is_idempotent_and_pinned():
                   "holders_count": 0, "total_inflows_count": Decimal(0), "total_outflows_count": Decimal(0)} for h in hours}
     aligned = ma.align_hourly(market, nansen, hours)
     writer = FakeWriter()
+    assert not hasattr(writer, "executemany")
     ma.replace_analytics_snapshot(writer, market, aligned)
     ma.replace_analytics_snapshot(writer, market, aligned)
     assert len(writer.deletes) == 4
     assert writer.inserted == {"market": 2 * ma.CANONICAL_HOURS, "aligned": 2 * ma.CANONICAL_HOURS}
     with pytest.raises(ma.AnalyticsContractError): ma.replace_analytics_snapshot(FakeWriter("server_otg"), market, aligned)
+    read_only_writer = FakeWriter(read_only="on")
+    with pytest.raises(ma.AnalyticsContractError, match="read-only"):
+        ma.replace_analytics_snapshot(read_only_writer, market, aligned)
+    assert read_only_writer.deletes == []
+
+
+def test_writer_failure_rolls_back_and_propagates():
+    hours = ma.utc_hour_spine()
+    market = ma.build_market_spine({}, hours)
+    aligned = [{"hour_start": h} for h in hours]
+    writer = FakeWriter()
+    writer.fail_on_aligned_insert = True
+    with pytest.raises(RuntimeError, match="synthetic cursor bulk failure"):
+        ma.replace_analytics_snapshot(writer, market, aligned)
+    assert writer.rollback_calls == 1
+
+
+def test_real_writer_capability_preflight_is_select_only_and_closes(monkeypatch):
+    writer = FakeWriter()
+    monkeypatch.setattr(ma, "staging_writer_connection", lambda: writer)
+    result = ma.staging_writer_capability_preflight()
+    assert result == {
+        "database": "server_otg_staging",
+        "transaction_read_only": "off",
+        "cursor_executemany_available": True,
+        "market_table_exists": True,
+        "aligned_table_exists": True,
+    }
+    assert writer.inserted == {"market": 0, "aligned": 0}
+    assert writer.deletes == []
+    assert writer.closed
+
+
+class _StopAfterResolver(Exception):
+    pass
+
+
+class _FakeConnection:
+    def rollback(self): pass
+    def close(self): pass
+
+
+def _exercise_build_until_resolver(monkeypatch, preflight):
+    calls = []
+    monkeypatch.setattr(ab, "_print_resource", lambda *_: None)
+    monkeypatch.setattr(ab, "staging_readonly_connection", _FakeConnection)
+    monkeypatch.setattr(ab, "read_nansen_source", lambda _: ({}, "digest", 12336, 29))
+    monkeypatch.setattr(ab, "production_readonly_connection", _FakeConnection)
+    def checked_preflight():
+        calls.append("preflight")
+        return preflight()
+    monkeypatch.setattr(ab, "staging_writer_capability_preflight", checked_preflight)
+    monkeypatch.setattr(ab, "load_overlap_rows", lambda _: calls.append("load_overlap") or [])
+    def resolver(*_, **__):
+        calls.append("resolver")
+        raise _StopAfterResolver
+    monkeypatch.setattr(ab, "resolve_overlap_rows", resolver)
+    return calls
+
+
+def test_builder_passes_writer_preflight_before_resolver(monkeypatch):
+    def preflight():
+        return {"database": "server_otg_staging", "transaction_read_only": "off",
+                "cursor_executemany_available": True, "market_table_exists": True,
+                "aligned_table_exists": True}
+    calls = _exercise_build_until_resolver(monkeypatch, preflight)
+    with pytest.raises(_StopAfterResolver):
+        ab.build_snapshot()
+    assert calls == ["preflight", "load_overlap", "resolver"]
+
+
+def test_builder_preflight_failure_prevents_resolver(monkeypatch):
+    def fail_preflight(): raise RuntimeError("writer preflight failed")
+    calls = _exercise_build_until_resolver(monkeypatch, fail_preflight)
+    with pytest.raises(RuntimeError, match="writer preflight failed"):
+        ab.build_snapshot()
+    assert calls == ["preflight"]
