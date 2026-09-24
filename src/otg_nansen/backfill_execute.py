@@ -40,24 +40,17 @@ class SourceCoverageGap(BackfillExecutionError):
 ABSOLUTE_MAX_UNITS_PER_INVOCATION = 20
 ABSOLUTE_MAX_LIVE_CALLS_PER_INVOCATION = 20
 MAX_CALLS_PER_UNIT = 1
-
-TASK028_EXPECTED_BOUNDS = (
-    (4, "2025-05-15T21:00:00Z", "2025-05-22T19:00:00Z", "2025-05-15T20:00:00Z", "2025-05-22T19:59:59Z"),
-    (5, "2025-05-22T20:00:00Z", "2025-05-29T18:00:00Z", "2025-05-22T19:00:00Z", "2025-05-29T18:59:59Z"),
-    (6, "2025-05-29T19:00:00Z", "2025-06-05T17:00:00Z", "2025-05-29T18:00:00Z", "2025-06-05T17:59:59Z"),
-    (7, "2025-06-05T18:00:00Z", "2025-06-12T16:00:00Z", "2025-06-05T17:00:00Z", "2025-06-12T16:59:59Z"),
-    (8, "2025-06-12T17:00:00Z", "2025-06-19T15:00:00Z", "2025-06-12T16:00:00Z", "2025-06-19T15:59:59Z"),
-    (9, "2025-06-19T16:00:00Z", "2025-06-26T14:00:00Z", "2025-06-19T15:00:00Z", "2025-06-26T14:59:59Z"),
-    (10, "2025-06-26T15:00:00Z", "2025-07-03T13:00:00Z", "2025-06-26T14:00:00Z", "2025-07-03T13:59:59Z"),
-    (11, "2025-07-03T14:00:00Z", "2025-07-10T12:00:00Z", "2025-07-03T13:00:00Z", "2025-07-10T12:59:59Z"),
-    (12, "2025-07-10T13:00:00Z", "2025-07-17T11:00:00Z", "2025-07-10T12:00:00Z", "2025-07-17T11:59:59Z"),
-    (13, "2025-07-17T12:00:00Z", "2025-07-24T10:00:00Z", "2025-07-17T11:00:00Z", "2025-07-24T10:59:59Z"),
-)
-
+BACKFILL_BATCH_STATUSES = frozenset({"SUCCESS", "SOURCE_COVERAGE_GAP", "LIVE_BATCH_FAILURE"})
 
 def execution_enabled(cli_opt_in: bool, environ: dict[str, str] | None = None) -> bool:
     env = os.environ if environ is None else environ
     return cli_opt_in and env.get("NANSEN_RUN_LIVE_BACKFILL") == "1"
+
+
+def format_batch_status(status: str) -> str:
+    if status not in BACKFILL_BATCH_STATUSES:
+        raise ValueError("unsupported backfill batch status")
+    return f"BACKFILL_BATCH_STATUS={status}"
 
 
 def _utc_wire(value: datetime) -> str:
@@ -69,8 +62,8 @@ def validate_invocation_limits(max_units: int, max_live_calls: int) -> None:
         raise BackfillExecutionError("max_units exceeds the per-invocation limit")
     if not isinstance(max_live_calls, int) or isinstance(max_live_calls, bool) or not 1 <= max_live_calls <= ABSOLUTE_MAX_LIVE_CALLS_PER_INVOCATION:
         raise BackfillExecutionError("max_live_calls exceeds the per-invocation limit")
-    if max_live_calls < max_units:
-        raise BackfillExecutionError("max_live_calls must be at least max_units for one call per unit")
+    if max_live_calls != max_units:
+        raise BackfillExecutionError("max_live_calls must equal max_units for one call per unit")
 
 
 def select_authorized_units(plan, progress, *, max_units: int, max_live_calls: int,
@@ -89,13 +82,6 @@ def select_authorized_units(plan, progress, *, max_units: int, max_live_calls: i
     if tuple(unit.index for unit in selected) != tuple(range(expected_first_pending_index, expected_first_pending_index + max_units)):
         raise BackfillExecutionError("authorized pending units are not a contiguous canonical batch")
     return selected
-
-
-def validate_task028_bounds(units) -> None:
-    actual = tuple((unit.index, _wire(unit.coverage_start), _wire(unit.coverage_end),
-                    _wire(unit.request_start), _wire(unit.request_end)) for unit in units)
-    if actual != TASK028_EXPECTED_BOUNDS:
-        raise BackfillExecutionError("selected canonical bounds differ from Task 028 authorization")
 
 
 def expected_progress_after(progress_before, successful_units: int) -> tuple[int, int, int]:
@@ -403,12 +389,6 @@ def main(argv=None) -> int:
     except BackfillExecutionError:
         print("EXECUTION_REFUSED=PLAN_PROGRESS_OR_SELECTION_MISMATCH")
         return 2
-    if tuple(unit.index for unit in selected) == tuple(range(4, 14)):
-        try:
-            validate_task028_bounds(selected)
-        except BackfillExecutionError:
-            print("EXECUTION_REFUSED=TASK028_BOUND_MISMATCH")
-            return 2
     if (before_rows != args.expected_flow_rows_before
             or canonical_counts["hourly"] != args.expected_hourly_rows_before
             or canonical_counts["daily"] != args.expected_daily_rows_before
@@ -439,7 +419,6 @@ def main(argv=None) -> int:
         pending_again = [unit for unit in plan.units if progress_again.statuses[unit.unit_id] == "PENDING"][:args.max_units]
         if [unit.unit_id for unit in pending_again] != [unit.unit_id for unit in selected]:
             raise BackfillExecutionError("pending unit selection changed before execution")
-        # The exact first-three authorization is deliberately frozen before any Nansen call.
         config = NansenConfig.from_env()
         completed_details: dict[str, dict[str, Any]] = {}
         calls_total = 0
@@ -579,7 +558,7 @@ def main(argv=None) -> int:
             print(f"RECENT_RETAINED_HOURLY_IDENTITIES_AFTER={recent_after[1]}")
             print("RECENT_RETAINED_STATE_UNCHANGED=PASS")
             print("RESTART_RESUME_PROOF=PASS")
-            print("TASK_028_STATUS=SUCCESS")
+            print(format_batch_status("SUCCESS"))
             _resource_snapshot("AFTER_BATCH")
         finally:
             fresh.close()
@@ -597,6 +576,6 @@ if __name__ == "__main__":
             raise
         # Do not print source response bodies or warning text.
         status = "SOURCE_COVERAGE_GAP" if isinstance(exc, SourceCoverageGap) else "LIVE_BATCH_FAILURE"
-        print(f"TASK_028_STATUS={status}")
+        print(format_batch_status(status))
         print(f"FAILURE_TYPE={type(exc).__name__}")
         raise SystemExit(1)

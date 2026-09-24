@@ -9,6 +9,7 @@ from otg_nansen.backfill import (
 from otg_nansen.backfill_execute import (
     ABSOLUTE_MAX_LIVE_CALLS_PER_INVOCATION,
     ABSOLUTE_MAX_UNITS_PER_INVOCATION,
+    format_batch_status,
     expected_progress_after,
     execution_enabled,
     first_pending_index,
@@ -16,7 +17,6 @@ from otg_nansen.backfill_execute import (
     should_stop_for_resource_pressure,
     _utc_wire,
     validate_invocation_limits,
-    validate_task028_bounds,
 )
 from otg_nansen.backfill_plan import build_canonical_plan
 
@@ -26,6 +26,14 @@ def test_backfill_runner_requires_both_explicit_opt_ins():
     assert not execution_enabled(True, {})
     assert not execution_enabled(True, {"NANSEN_RUN_LIVE_BACKFILL": "true"})
     assert execution_enabled(True, {"NANSEN_RUN_LIVE_BACKFILL": "1"})
+
+
+def test_batch_status_output_is_task_agnostic():
+    assert format_batch_status("SUCCESS") == "BACKFILL_BATCH_STATUS=SUCCESS"
+    assert format_batch_status("SOURCE_COVERAGE_GAP") == "BACKFILL_BATCH_STATUS=SOURCE_COVERAGE_GAP"
+    assert format_batch_status("LIVE_BATCH_FAILURE") == "BACKFILL_BATCH_STATUS=LIVE_BATCH_FAILURE"
+    with pytest.raises(ValueError):
+        format_batch_status("UNSUPPORTED_STATUS")
 
 
 def test_checkpoint_timestamp_gate_compares_utc_instants():
@@ -46,9 +54,12 @@ def test_absolute_invocation_caps_reject_batches_over_twenty():
     with pytest.raises(BackfillExecutionError):
         validate_invocation_limits(21, 21)
     with pytest.raises(BackfillExecutionError):
-        validate_invocation_limits(10, 21)
+        validate_invocation_limits(10, 11)
     with pytest.raises(BackfillExecutionError):
         validate_invocation_limits(10, 9)
+    with pytest.raises(BackfillExecutionError):
+        validate_invocation_limits(21, 21)
+    validate_invocation_limits(20, 20)
 
 
 def test_expected_complete_and_first_pending_mismatches_refuse_selection():
@@ -62,33 +73,26 @@ def test_expected_complete_and_first_pending_mismatches_refuse_selection():
                                 expected_complete_before=3, expected_first_pending_index=3)
 
 
-def test_resumed_state_selects_ten_dynamic_pending_units_four_through_thirteen():
+def test_resumed_state_selects_twenty_dynamic_pending_units_fourteen_through_thirty_three():
     plan = build_canonical_plan()
-    progress = _progress(plan, complete=3)
-    selected = select_authorized_units(plan, progress, max_units=10, max_live_calls=10,
-                                       expected_complete_before=3, expected_first_pending_index=4)
-    assert tuple(unit.index for unit in selected) == tuple(range(4, 14))
+    progress = _progress(plan, complete=13)
+    selected = select_authorized_units(plan, progress, max_units=20, max_live_calls=20,
+                                       expected_complete_before=13, expected_first_pending_index=14)
+    assert tuple(unit.index for unit in selected) == tuple(range(14, 34))
     assert all(unit.desired_bucket_count == 167 for unit in selected)
-    validate_task028_bounds(selected)
-
-
-def test_task028_independent_bounds_reject_an_altered_unit():
-    plan = build_canonical_plan()
-    progress = _progress(plan, complete=3)
-    selected = select_authorized_units(plan, progress, max_units=10, max_live_calls=10,
-                                       expected_complete_before=3, expected_first_pending_index=4)
-    changed = (selected[0].__class__(**{**selected[0].__dict__, "request_end": selected[0].request_end}), *selected[1:])
-    validate_task028_bounds(changed)
-    altered_first = selected[0].__class__(**{**selected[0].__dict__, "coverage_end": selected[0].coverage_end.replace(minute=1)})
-    with pytest.raises(BackfillExecutionError):
-        validate_task028_bounds((altered_first, *selected[1:]))
+    assert selected[0].index == 14
+    assert selected[-1].index == 33
+    assert [right.index - left.index for left, right in zip(selected, selected[1:])] == [1] * 19
+    assert first_pending_index(plan, progress.statuses) == 14
 
 
 def test_progress_math_is_relative_to_persisted_completion():
     plan = build_canonical_plan()
-    before = _progress(plan, complete=3)
-    assert expected_progress_after(before, 1) == (4, 70, 0)
-    assert expected_progress_after(before, 10) == (13, 61, 0)
+    before = _progress(plan, complete=13)
+    assert expected_progress_after(before, 1) == (14, 60, 0)
+    assert expected_progress_after(before, 20) == (33, 41, 0)
+    statuses = {unit.unit_id: ("COMPLETE" if unit.index <= 33 else "PENDING") for unit in plan.units}
+    assert first_pending_index(plan, statuses) == 34
 
 
 def test_resource_stop_is_relative_to_this_invocation_not_unit_index():
