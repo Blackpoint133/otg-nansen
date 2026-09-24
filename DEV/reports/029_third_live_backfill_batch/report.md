@@ -150,3 +150,7 @@ The initial validator compared timezone-aware datetimes without canonicalizing P
 ## NEXT_RECOMMENDED_TASK
 
 Review the UTC-canonicalization correction and separately authorize a new bounded invocation beginning at unit 29. Do not start that invocation or Task 030 automatically.
+
+## Task 029R recovery addendum (2026-09-23)
+
+The original `TASK_029_STATUS=LIVE_BATCH_FAILURE` above is preserved. Task 029R revalidated the UTC/DST-fold fix physically: unit 28 was 167/167 with no missing or duplicate hourly identities, and units 14–28 together were 2,505/2,505. It then executed only the five remaining units, 29–33, using five requests. Each unit had a valid warning-audited success, 167/167 UTC-normalized desired identities, and no duplicates. Progress advanced to 33 complete / 41 pending / 0 ambiguous; unit 34 is next. Flow rows now total 5,563 (5,534 hourly and 29 daily), daily identities and the September high-water checkpoint are unchanged, and production remains untouched. See [the Task 029R recovery report](../029r_complete_interrupted_backfill_batch/report.md).
