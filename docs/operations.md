@@ -141,3 +141,9 @@ Task 032R fixed and tested runner terminal checks without live calls or staging 
 # atomically replaces only the two analytics snapshots. The same in-memory
 # snapshot is written and read back twice to verify persistence idempotency;
 # the second pass makes no RPC call. No Nansen request is part of this build.
+#
+# The first Task 033 execution applied migration 005 but stopped before staging
+# data writes because the pinned staging writer could not open its connection.
+# A source fix is now pushed; both analytics tables were confirmed empty after
+# that attempt. Completing the build requires a separately authorized fresh
+# overlap-resolution pass because the in-memory RPC mapping was not persisted.
