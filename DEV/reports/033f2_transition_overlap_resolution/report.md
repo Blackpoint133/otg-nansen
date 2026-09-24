@@ -199,3 +199,16 @@ PASS. The report is English-only.
 ## NEXT_RECOMMENDED_TASK
 
 Authorize a bounded read-only rerun sufficient to regenerate the resolution digest, then ratify the timestamp contract before analytics implementation. Do not exceed the authorized RPC-object budget in this task.
+
+## TASK_033F2R_ADDENDUM
+
+The first Task 033F2 run resolved all 5,632 rows and reproduced the accepted offset, ordering, and UTC coverage aggregates. Its final digest serialization failed after those checks; no additional RPC calls were made after that run. Task 033F2R separately repeated the read-only receipt/block resolution, reproduced the complete evidence set, and generated and independently rechecked the deterministic digest:
+
+```text
+OVERLAP_RESOLUTION_DIGEST_TUPLE_COUNT=5632
+OVERLAP_TIME_RESOLUTION_DIGEST=08e64456eea3796ce0e1cfa3b475e2ac66f98050cf91ed99fcb6704a290feca6
+OVERLAP_TIME_RESOLUTION_DIGEST_DETERMINISTIC=PASS
+TIMESTAMP_TRANSITION_CONTRACT=RATIFIED
+```
+
+No production or staging data was modified. The Task 033F2R report records the repeated counts, RPC budget, tests, and resource observations.
