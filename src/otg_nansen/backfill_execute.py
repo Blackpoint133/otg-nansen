@@ -57,6 +57,13 @@ def _utc_wire(value: datetime) -> str:
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _utc_identity(bucket_start: datetime, bucket_end: datetime) -> tuple[datetime, datetime]:
+    """Canonicalize database-returned aware timestamps before Python set comparison."""
+    if bucket_start.utcoffset() is None or bucket_end.utcoffset() is None:
+        raise ValueError("flow bucket timestamps must be timezone-aware")
+    return bucket_start.astimezone(timezone.utc), bucket_end.astimezone(timezone.utc)
+
+
 def validate_invocation_limits(max_units: int, max_live_calls: int) -> None:
     if not isinstance(max_units, int) or isinstance(max_units, bool) or not 1 <= max_units <= ABSOLUTE_MAX_UNITS_PER_INVOCATION:
         raise BackfillExecutionError("max_units exceeds the per-invocation limit")
@@ -153,7 +160,7 @@ def _target_counts(connection, units) -> dict[str, Any]:
     desired = {(bucket_start, bucket_start + timedelta(hours=1))
                for unit in units
                for bucket_start in (unit.coverage_start + timedelta(hours=i) for i in range(unit.desired_bucket_count))}
-    observed = {(row[3], row[4]) for row in keys if (row[3], row[4]) in desired}
+    observed = {_utc_identity(row[3], row[4]) for row in keys}
     daily = connection.execute(
         """SELECT chain, token_address, flow_label, date, bucket_end
            FROM nansen.flows WHERE chain=%s AND token_address=%s AND flow_label=%s
@@ -260,7 +267,7 @@ def _validate_unit_readonly(unit, run_id: str) -> dict[str, Any]:
                  AND flow_label=%s AND date=%s AND bucket_end-date=interval '1 hour')""",
             (unit.chain, unit.token_address, unit.flow_label, unit.request_start),
         ).fetchone()[0]
-        hourly = connection.execute(
+        hourly_rows = connection.execute(
             """SELECT date, bucket_end FROM nansen.flows WHERE chain=%s AND token_address=%s
                  AND flow_label=%s AND date BETWEEN %s AND %s
                  AND bucket_end-date=interval '1 hour'
@@ -276,6 +283,7 @@ def _validate_unit_readonly(unit, run_id: str) -> dict[str, Any]:
         expected = {(bucket_start, bucket_start + timedelta(hours=1))
                     for bucket_start in (unit.coverage_start + timedelta(hours=i)
                                          for i in range(unit.desired_bucket_count))}
+        hourly = [_utc_identity(row[0], row[1]) for row in hourly_rows]
         seen = set(hourly)
         missing = expected - seen
         return {

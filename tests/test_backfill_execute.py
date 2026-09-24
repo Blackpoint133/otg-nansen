@@ -1,5 +1,6 @@
 import pytest
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from otg_nansen.backfill import (
     BackfillExecutionError,
@@ -13,6 +14,7 @@ from otg_nansen.backfill_execute import (
     expected_progress_after,
     execution_enabled,
     first_pending_index,
+    _utc_identity,
     select_authorized_units,
     should_stop_for_resource_pressure,
     _utc_wire,
@@ -39,6 +41,19 @@ def test_batch_status_output_is_task_agnostic():
 def test_checkpoint_timestamp_gate_compares_utc_instants():
     local = datetime(2026, 9, 20, 16, 59, 59, tzinfo=timezone(timedelta(hours=-7)))
     assert _utc_wire(local) == "2026-09-20T23:59:59Z"
+
+
+def test_bucket_identity_comparison_canonicalizes_daylight_saving_fold_to_utc():
+    los_angeles = ZoneInfo("America/Los_Angeles")
+    database_bucket = (
+        datetime(2025, 11, 2, 1, 0, tzinfo=los_angeles, fold=0),
+        datetime(2025, 11, 2, 1, 0, tzinfo=los_angeles, fold=1),
+    )
+    canonical_bucket = (
+        datetime(2025, 11, 2, 8, 0, tzinfo=timezone.utc),
+        datetime(2025, 11, 2, 9, 0, tzinfo=timezone.utc),
+    )
+    assert _utc_identity(*database_bucket) == canonical_bucket
 
 
 def _progress(plan, complete=0, pending=None, ambiguous=0):
