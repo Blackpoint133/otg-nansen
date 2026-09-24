@@ -128,3 +128,7 @@ The two failures classify as non-retryable under current official guidance and t
 ## NEXT_RECOMMENDED_TASK
 
 Check account access and credit status through the Nansen account/support channels without calling Flows. After resolving the access/payment condition, separately authorize one bounded unit 46 attempt. Do not execute unit 47.
+
+## Task 030K recovery addendum
+
+The operator replaced the local API key. Task 030K made one separately authorized unit 46 attempt through the committed runner; it succeeded with a valid warning-audited exact-window run and 167/167 desired hourly identities. The prior incomplete Task 030 and Task 030R history remains unchanged. Unit 47 was not executed; progress is now 46 complete / 28 pending / 0 ambiguous.

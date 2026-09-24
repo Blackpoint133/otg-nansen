@@ -121,3 +121,5 @@ Task 029R revalidated the committed UTC identity fix and then used the generic r
 Task 030R stopped after one new attempt for pending unit 46 returned an API error. Units 34–45 are complete; units 46–53 remain pending. Failed audit history is retained, no retry loop ran, and no unit 47 or later was requested. Review the Task 030 report and staging progress before any separately authorized continuation.
 
 Task 030D diagnosed the two unit 46 failures as HTTP 403 `NansenHTTPError` responses. Their safe summaries indicate an insufficient-credit condition. Current official Nansen guidance marks the credit condition and forbidden access non-retryable; 403 is also excluded from the committed client's retryable status set. No third call was authorized or made. Unit 46 remains blocked pending account/credit resolution; units 47–53 remain pending.
+
+Task 030K validated the operator-replaced local key with one authorized unit 46 request. The exact-window run succeeded and all 167 desired hourly identities are present. Progress is 46 complete / 28 pending / 0 ambiguous; unit 47 is next and was not executed. Production remains untouched.

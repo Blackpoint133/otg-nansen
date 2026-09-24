@@ -121,3 +121,7 @@ Investigate a safe classification for unit 46's API error and separately authori
 ## Task 030D diagnostic addendum
 
 Task 030D inspected the two unit 46 failed audits: both are `NansenHTTPError` with HTTP 403, one API attempt and zero pages/records. Their exact summary SHA-256 values and safe semantic flags are recorded in the Task 030D report; raw summaries are not published. The stored summaries refer to insufficient credits. Current official Nansen documentation classifies 403 as Forbidden and the insufficient-credit condition as non-retryable; the client retry set also excludes 403. Therefore no third attempt was authorized or made. Unit 46 remains pending, and units 47–53 remain unattempted.
+
+## Task 030K recovery addendum
+
+The operator replaced the local API key. Task 030K made one separately authorized unit 46 attempt through the committed runner; it succeeded with a valid warning-audited exact-window run and 167/167 desired hourly identities. The prior incomplete Task 030 and Task 030R history remains unchanged. Unit 47 was not executed; progress is now 46 complete / 28 pending / 0 ambiguous.
