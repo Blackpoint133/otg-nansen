@@ -80,3 +80,73 @@ readback to check idempotency without another RPC pass.
 The outputs are structural descriptive data only. Correlations, event studies,
 causal interpretation, prediction, and deployment require separate review and
 authorization.
+
+## Task 034 preregistered relationship analysis
+
+Task 034 is descriptive. Correlation is not causation; a lagged association is
+not prediction, and within-hour ordering is unknown. Native GUN marketplace
+amounts and Avalanche Nansen `$GUN` observations remain separate series and
+are never numerically combined. No p-values are calculated and no causal or
+predictive claims are made.
+
+The only real input is read-only `server_otg_staging.nansen.otg_nansen_hourly`.
+It must contain the 12,336 exact canonical UTC hours and match aligned digest
+`9ac2109500aea84160555928d297b7efdcd551e23f3259bee5482a1ae5ed19f8`; any
+identity or digest mismatch stops analysis.
+
+The two fixed `$GUN` drivers are `gun_price_return_1h` and
+`flow_imbalance_share`. The latter equals
+`flow_count_imbalance / flow_count_total` only when total is positive and is
+NULL otherwise. The three fixed OTG outcomes are `market_trade_tx_count`,
+`market_native_gun_amount_truncated`, and `market_unique_buyers`. Each
+nonnegative outcome is transformed with `log1p`; there is no winsorization or
+arbitrary outlier deletion. The primary form subtracts the median transformed
+outcome for the same UTC hour-of-week group (weekday * 24 + hour, 0 through
+167), using `statistics.median` across the full sample. The sensitivity form
+is `log1p(value[t]) - log1p(value[t-1])`, with the first hour NULL.
+
+Fixed lags are 0, 1, 6, and 24 hours. Driver at `t-k` is paired with outcome
+at `t`, so positive lag means the `$GUN` observation precedes the market
+observation. All 48 combinations of two drivers, three outcomes, two forms,
+and four lags are retained, including undefined coefficients. Each row gives
+finite-pair n, Spearman rho as the primary descriptive coefficient, and
+Pearson r as secondary. Spearman uses average ranks for ties. Coefficients are
+NULL below three finite pairs or when their denominator is zero. No p-values
+or best-lag selection are used.
+
+Time stability uses exactly eight contiguous chronological blocks of 1,542
+canonical outcome hours. Every fixed relationship is recalculated in each
+block with its same lag. A block coefficient is NULL below 20 valid pairs or
+when undefined. The output reports the number of defined block coefficients,
+their median, minimum, maximum, and positive, negative, and zero counts. These
+are diagnostics, not significance labels.
+
+One event analysis uses only non-NULL `gun_price_return_1h`. Negative and
+positive thresholds are the empirical 5th and 95th percentiles, respectively,
+using position `(n-1)*q` and linear interpolation. Thresholds are not adjusted
+after observing event counts. Positive and negative candidates are handled
+separately. Chronologically consecutive candidates no more than 24 hours apart
+form a cluster represented by its largest absolute return; the earliest time
+wins a tie. After declustering, an event is retained only when both `t-1` and
+`t+24` exist. The three outcomes are summarized at horizons 0, 1, 6, and 24
+hours as `log1p(value[t+h]) - log1p(value[t-1])`. Horizon zero means same-hour
+association only because within-hour ordering is unknown.
+
+All 24 direction/outcome/horizon cells are retained. Each reports count, mean,
+median, q25, q75, and a deterministic non-parametric bootstrap interval for the
+median. Bootstrap uses 2,000 replacement samples of the event-group size with
+a local `random.Random`. Seed is `3401 + direction_index*100 +
+outcome_index*10 + horizon_index`; fixed category indices are positive=0,
+negative=1; the outcome order above; and horizon order 0, 1, 6, 24. Interval
+limits are interpolated at 2.5% and 97.5%. They are descriptive, not binary
+significance decisions. Event groups below 20 are flagged without changing
+the method.
+
+Artifacts retain every predefined cell and follow fixed category ordering,
+never coefficient magnitude. Aggregate CSV and JSON contain no hourly records,
+event timestamp list, or identities. Result SHA-256 digests use normalized
+logical rows or canonical summary JSON, excluding filesystem metadata and
+current time. No arbitrary lag search, outcome changes, threshold tuning,
+outlier removal, or winsorization is permitted after preregistration. If an
+implementation defect is found after reading the real snapshot, execution
+stops for a separately reviewed repair.
