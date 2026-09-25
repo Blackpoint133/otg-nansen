@@ -2,22 +2,29 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import logging
 import math
+import os
 from pathlib import Path
+import tempfile
 import threading
-import time
 from typing import Any, Callable
 from urllib.parse import urlsplit
 
 from .demo_data import HistoricalArtifactError, load_historical_artifacts
 from .demo_live import DemoLiveAdapter, DemoLiveError, sanitized_error_code
 
-CACHE_TTL_SECONDS = 60
+REFRESH_INTERVAL_SECONDS = 60 * 60
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
+_PROGRAM_DATA = Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData"))
+DEFAULT_STATE_PATH = Path(os.environ.get(
+    "OTG_NANSEN_DEMO_STATE_PATH",
+    str(_PROGRAM_DATA / "OTG" / "NansenDemo" / "live-state.json"),
+))
 WEB_ROOT = Path(__file__).resolve().parents[2] / "web"
 STATIC_FILES = {
     "/demo.js": ("demo.js", "text/javascript; charset=utf-8"),
@@ -38,16 +45,15 @@ def _json_safe(value: Any) -> Any:
 
 
 class DemoService:
-    """Sanitized static history plus explicit, cached live refreshes."""
+    """Sanitized history and one process-wide, hourly live observation."""
 
     def __init__(
         self,
         *,
         historical_loader: Callable[[], dict[str, Any]] = load_historical_artifacts,
         live_fetch: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
-        clock: Callable[[], float] = time.monotonic,
         wall_clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
-        cache_ttl_seconds: int = CACHE_TTL_SECONDS,
+        state_path: Path | None = DEFAULT_STATE_PATH,
     ) -> None:
         self._historical: dict[str, Any] | None = None
         self._historical_error: str | None = None
@@ -56,12 +62,143 @@ class DemoService:
         except Exception:
             self._historical_error = "HISTORICAL_ARTIFACT_INVALID"
         self._live_fetch = live_fetch or self._default_live_fetch
-        self._clock = clock
         self._wall_clock = wall_clock
-        self.cache_ttl_seconds = max(CACHE_TTL_SECONDS, cache_ttl_seconds)
-        self._cache_lock = threading.Lock()
+        self._state_path = Path(state_path) if state_path is not None else None
+        self._state_lock = threading.Lock()
+        self._refresh_lock = threading.Lock()
         self._cached_live: dict[str, Any] | None = None
-        self._cached_at: float | None = None
+        self._last_attempt_utc: datetime | None = None
+        self._last_error_code: str | None = None
+        self._load_state()
+
+    @staticmethod
+    def next_refresh_time(now: datetime, last_attempt: datetime | None) -> datetime:
+        """Return the next stable hourly slot, never less than 60 minutes apart."""
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise ValueError("clock must be timezone-aware")
+        now = now.astimezone(timezone.utc)
+        if last_attempt is None:
+            return now.replace(minute=5, second=0, microsecond=0) + (timedelta(hours=1) if now.minute >= 5 else timedelta(0))
+        next_at = last_attempt.astimezone(timezone.utc) + timedelta(seconds=REFRESH_INTERVAL_SECONDS)
+        return max(now, next_at)
+
+    def _load_state(self) -> None:
+        if self._state_path is None:
+            return
+        try:
+            payload = json.loads(self._state_path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                return
+            live = payload.get("last_success")
+            if isinstance(live, dict) and live.get("status") == "success" and isinstance(live.get("fetched_at_utc"), str):
+                self._cached_live = _json_safe(live)
+            self._last_attempt_utc = _parse_timestamp(payload.get("last_attempt_utc"))
+            if self._last_attempt_utc is None and self._cached_live is not None:
+                self._last_attempt_utc = _parse_timestamp(self._cached_live.get("fetched_at_utc"))
+            error = payload.get("last_error_code")
+            self._last_error_code = error if isinstance(error, str) and error.isupper() else None
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            self._cached_live = None
+            self._last_attempt_utc = None
+            self._last_error_code = None
+
+    def _persist_state(self) -> None:
+        if self._state_path is None:
+            return
+        payload = {
+            "last_success": self._cached_live,
+            "last_attempt_utc": _format_timestamp(self._last_attempt_utc) if self._last_attempt_utc else None,
+            "last_error_code": self._last_error_code,
+        }
+        try:
+            self._state_path.parent.mkdir(parents=True, exist_ok=True)
+            handle, temp_name = tempfile.mkstemp(prefix="live-state-", suffix=".tmp", dir=self._state_path.parent)
+            try:
+                with os.fdopen(handle, "w", encoding="utf-8") as stream:
+                    json.dump(payload, stream, allow_nan=False, separators=(",", ":"))
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(temp_name, self._state_path)
+            finally:
+                if os.path.exists(temp_name):
+                    os.unlink(temp_name)
+        except OSError:
+            logging.getLogger(__name__).warning("Nansen live cache persistence failed")
+
+    def _success_is_recent(self, now: datetime) -> bool:
+        cached = self._cached_live
+        if not cached:
+            return False
+        fetched = _parse_timestamp(cached.get("fetched_at_utc"))
+        return fetched is not None and timedelta(0) <= now.astimezone(timezone.utc) - fetched <= timedelta(seconds=REFRESH_INTERVAL_SECONDS)
+
+    def live(self) -> tuple[int, dict[str, Any]]:
+        """Read the shared sanitized snapshot. This endpoint never calls Nansen."""
+        with self._state_lock:
+            if self._cached_live is not None:
+                return 200, _json_safe(dict(self._cached_live))
+            return 503, {"status": "error", "error_code": "LIVE_DATA_NOT_READY"}
+
+    def refresh_if_due(self, *, startup: bool = False) -> bool:
+        """Perform at most one request when a startup/UTC hourly cycle is due."""
+        now = self._wall_clock()
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise ValueError("clock must be timezone-aware")
+        now = now.astimezone(timezone.utc)
+        if not self._refresh_lock.acquire(blocking=False):
+            return False
+        try:
+            with self._state_lock:
+                if startup and self._success_is_recent(now):
+                    return False
+                if self._last_attempt_utc is not None and now - self._last_attempt_utc < timedelta(seconds=REFRESH_INTERVAL_SECONDS):
+                    return False
+                if not startup and (self._last_attempt_utc is None or now - self._last_attempt_utc < timedelta(seconds=REFRESH_INTERVAL_SECONDS)):
+                    return False
+                self._last_attempt_utc = now
+                self._last_error_code = None
+                self._persist_state()
+                historical = self._historical
+            try:
+                if historical is None:
+                    raise DemoLiveError("HISTORICAL_ARTIFACT_INVALID")
+                result = _json_safe(self._live_fetch(historical))
+                if not isinstance(result, dict) or result.get("status") != "success":
+                    raise DemoLiveError("INVALID_LIVE_SERVICE_RESULT")
+                result["fetched_at_utc"] = _format_timestamp(self._wall_clock())
+                result.pop("fetch_mode", None)
+                with self._state_lock:
+                    self._cached_live = result
+                    self._last_error_code = None
+                    self._persist_state()
+                return True
+            except Exception as exc:
+                code = sanitized_error_code(exc)
+                with self._state_lock:
+                    self._last_error_code = code
+                    self._persist_state()
+                logging.getLogger(__name__).warning("Nansen hourly refresh failed: %s", code)
+                return False
+        finally:
+            self._refresh_lock.release()
+
+    def start_scheduler(self) -> threading.Event:
+        """Start one daemon scheduler for this persistent service process."""
+        stop_event = threading.Event()
+
+        def run() -> None:
+            self.refresh_if_due(startup=True)
+            while not stop_event.is_set():
+                now = self._wall_clock()
+                with self._state_lock:
+                    next_at = self.next_refresh_time(now, self._last_attempt_utc)
+                delay = max(0.1, (next_at - now.astimezone(timezone.utc)).total_seconds())
+                if stop_event.wait(delay):
+                    break
+                self.refresh_if_due()
+
+        threading.Thread(target=run, name="nansen-hourly-refresh", daemon=True).start()
+        return stop_event
 
     @staticmethod
     def _default_live_fetch(historical: dict[str, Any]) -> dict[str, Any]:
@@ -72,50 +209,34 @@ class DemoService:
             return 503, {"status": "error", "error_code": self._historical_error or "HISTORICAL_ARTIFACT_INVALID"}
         return 200, _json_safe({"status": "success", **self._historical})
 
-    def live(self) -> tuple[int, dict[str, Any]]:
-        with self._cache_lock:
-            now = self._clock()
-            if self._cached_live is not None and self._cached_at is not None and now - self._cached_at < self.cache_ttl_seconds:
-                cached = dict(self._cached_live)
-                cached["fetch_mode"] = "CACHED"
-                return (200 if cached.get("status") == "success" else 503), _json_safe(cached)
-            if self._historical is None:
-                result = {
-                    "status": "error",
-                    "error_code": "HISTORICAL_ARTIFACT_INVALID",
-                    "fetch_mode": "LIVE",
-                    "fetched_at_utc": self._timestamp(),
-                }
-            else:
-                try:
-                    result = _json_safe(self._live_fetch(self._historical))
-                    if not isinstance(result, dict) or result.get("status") != "success":
-                        raise DemoLiveError("INVALID_LIVE_SERVICE_RESULT")
-                    result["fetch_mode"] = "LIVE"
-                except Exception as exc:
-                    result = {
-                        "status": "error",
-                        "error_code": sanitized_error_code(exc),
-                        "fetch_mode": "LIVE",
-                        "fetched_at_utc": self._timestamp(),
-                    }
-            self._cached_live = dict(result)
-            self._cached_at = self._clock()
-            return (200 if result.get("status") == "success" else 503), _json_safe(result)
-
     def health(self) -> tuple[int, dict[str, Any]]:
         return 200, {
             "status": "ok",
             "historical_artifacts": "ready" if self._historical is not None else "unavailable",
-            "live_data": "requested_on_demand",
+            "live_data": "automatic_hourly",
             "database_required": False,
         }
 
     def _timestamp(self) -> str:
-        now = self._wall_clock()
-        if now.tzinfo is None or now.utcoffset() is None:
-            now = now.replace(tzinfo=timezone.utc)
-        return now.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        return _format_timestamp(self._wall_clock())
+
+
+def _format_timestamp(value: datetime) -> str:
+    if value.tzinfo is None or value.utcoffset() is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _parse_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed.astimezone(timezone.utc)
 
 
 def make_handler(service: DemoService, web_root: Path = WEB_ROOT):
@@ -173,14 +294,17 @@ def make_handler(service: DemoService, web_root: Path = WEB_ROOT):
 def serve(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, *, service: DemoService | None = None) -> None:
     if host not in {"127.0.0.1", "localhost"}:
         raise ValueError("demo server may bind only to loopback")
-    server = ThreadingHTTPServer((host, port), make_handler(service or DemoService()))
+    service = service or DemoService()
+    service.refresh_if_due(startup=True)
+    server = ThreadingHTTPServer((host, port), make_handler(service))
+    stop_event = service.start_scheduler()
     print(f"OTG Nansen demo listening at http://{host}:{server.server_port}/")
-    print("Live Nansen data is requested only after selecting Refresh Live Data.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        stop_event.set()
         server.server_close()
 
 
