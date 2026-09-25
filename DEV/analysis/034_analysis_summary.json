@@ -1,0 +1,59 @@
+{
+  "analysis_summary_digest": "e7a16b3b2a84c15d20b5ce019e7463357b06513b60ed7e48754113df2e844e74",
+  "block_count": 8,
+  "block_size": 1542,
+  "bootstrap_base_seed": 3401,
+  "bootstrap_replicates": 2000,
+  "canonical_end": "2026-09-20T23:00:00Z",
+  "canonical_start": "2025-04-25T00:00:00Z",
+  "drivers": [
+    "gun_price_return_1h",
+    "flow_imbalance_share"
+  ],
+  "event_decluster_hours": 24,
+  "event_horizons": [
+    0,
+    1,
+    6,
+    24
+  ],
+  "event_quantiles": {
+    "negative": 0.05,
+    "positive": 0.95
+  },
+  "event_summary_digest": "5f3e89ed359275c65977acaf02ad45d14b2a8329fcc4902c8e3b590396bff772",
+  "event_threshold_returns": {
+    "q05": -0.016533971141552434,
+    "q95": 0.016966713439596874
+  },
+  "fixed_lags": [
+    0,
+    1,
+    6,
+    24
+  ],
+  "hour_of_week_group_coverage": {
+    "market_native_gun_amount_truncated": 168,
+    "market_trade_tx_count": 168,
+    "market_unique_buyers": 168
+  },
+  "methodology_version": "034-preregistered-v1",
+  "negative_candidate_count": 617,
+  "negative_declustered_event_count": 146,
+  "negative_eligible_event_count": 145,
+  "outcome_forms": [
+    "hour_of_week_seasonal_residual",
+    "delta_log1p_1h"
+  ],
+  "outcomes": [
+    "market_trade_tx_count",
+    "market_native_gun_amount_truncated",
+    "market_unique_buyers"
+  ],
+  "positive_candidate_count": 617,
+  "positive_declustered_event_count": 146,
+  "positive_eligible_event_count": 145,
+  "relationship_matrix_digest": "81004c088b886eee4289151803a18c27d8ee4a75132f178ce6a8be584b1831ef",
+  "snapshot_digest": "9ac2109500aea84160555928d297b7efdcd551e23f3259bee5482a1ae5ed19f8",
+  "snapshot_row_count": 12336
+}
