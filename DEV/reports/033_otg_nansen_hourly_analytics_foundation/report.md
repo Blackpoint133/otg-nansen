@@ -223,3 +223,16 @@ Task 033R5 passed the production read-only, staging read-only, real writer capab
 The builder then stopped in `_assert_readback()` because `len(set(starts))` reported a duplicate. A separate staging read-only validation confirmed SQL distinct counts and UTC-normalized Python identities are each 12,336, the complete canonical expected set is present, there are no UTC gaps, and the physical market/aligned digests match their in-memory digests. The local-time `ZoneInfo` values returned for `timestamptz` make Python set equality collapse the two instants in the repeated fall-back wall-clock hour (raw set size 12,335); UTC-normalized values have 12,336 distinct identities. This is a validation-code defect, not a physical duplicate.
 
 The builder stopped before its second same-memory replacement. Idempotency therefore remains unproven. Per the source-change stop rule, no code or tests were changed after the RPC campaign and no further write was attempted. The data is physically complete by read-only count, digest, expected-set, and continuity evidence, but Task 033 is not fully ratified until the UTC-normalized assertion is repaired/tested and idempotency is separately completed.
+
+## TASK_033R6_RATIFICATION_ADDENDUM
+
+Task 033R6 fixed `_assert_readback()` to compare the ordered hour sequence only after normalizing every `timestamptz` value to UTC. Offline DST-fold tests passed; the fix was pushed as `1991405e1e392c9b5888f8a0a75ba528222a5e33` before staging DML. No GUNZ RPC or Nansen API request was made.
+
+The two already-persisted 12,336-row snapshots were loaded read-only and their identities/digests validated. Those same in-memory row objects were used for two replacement transactions. Each write and readback retained 12,336 rows per table, passed canonical UTC identity validation, and produced the same accepted market/aligned digests. Persistence idempotency passed.
+
+A production read-only aggregate matched the physical market totals (9,562,201 transactions; native amount sum 356,791,669) and returned full-range distinct buyer/seller/item counts. The identical aggregate SELECT was executed a second time because the first completed command session did not return its output; both executions were read-only and no individual rows were loaded. The source suite passed 265 tests with 6 skipped. Task 033 is ratified as a descriptive staging data foundation; no correlation, event study, causal conclusion, prediction, or deployment was performed.
+
+```text
+TASK_033_RATIFIED_STATUS=SUCCESS
+NEXT_PHASE_READY=YES
+```
