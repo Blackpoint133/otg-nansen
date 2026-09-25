@@ -101,3 +101,15 @@ Workability, Creativity & Originality, and Documentation & Submission.
 The next code milestone is specified in
 [`meridian_demo_script.md`](meridian_demo_script.md). No API call was made to
 complete this audit.
+
+## TASK 036 STATUS ADDENDUM
+
+Task 035 remains the historical audit snapshot above. After it, Task 036 added
+one separately documented live demo validation request on 2026-09-25 UTC. The
+documented project minimum is therefore **118 in-window attempts** (117 from
+the Task 035 minimum plus this one request). This is project-side evidence and
+does not guarantee that Nansen's internal quota counter records the same
+total. The 100+ interpretation is met by this documented minimum; the 1,000
+interpretation remains unmet. The local demo now has a working read-only
+presentation surface and passed a one-request live validation; the recording,
+X post, and entry form remain pending.
