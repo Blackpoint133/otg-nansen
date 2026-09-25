@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090e17">
+  <title>OTG - Nansen Market Intelligence</title>
+  <link rel="stylesheet" href="/demo.css">
+  <script src="/demo.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">OTG</span><span><strong>NANSEN</strong><small>MARKET INTELLIGENCE</small></span></div>
+      <div class="top-meta"><span class="live-dot"></span> HISTORICAL RESEARCH <span class="divider">/</span> AVALANCHE $GUN</div>
+    </header>
+
+    <section class="hero">
+      <div><p class="eyebrow">MARKET SIGNAL CONTEXT</p><h1>Does Smart Money activity<br>line up with OTG markets?</h1></div>
+      <p class="hero-note">Historical relationship research<br>powered by Nansen data</p>
+    </section>
+
+    <section class="live-grid" aria-label="Live Nansen observation">
+      <article class="panel live-panel">
+        <div class="panel-head"><div><p class="eyebrow">LIVE NANSEN DATA</p><h2>$GUN · Smart Money</h2></div><span id="fetch-badge" class="state-badge state-idle">NOT LOADED</span></div>
+        <div id="live-error" class="error-banner" hidden>Live Nansen data unavailable. Historical analysis is still available.</div>
+        <div class="live-values">
+          <div><span class="label">LATEST COMPLETED HOUR</span><strong id="bucket-time">—</strong></div>
+          <div><span class="label">PRICE</span><strong id="live-price">—</strong></div>
+          <div><span class="label">1H MOVE</span><strong id="live-return">—</strong></div>
+          <div><span class="label">FLOW IMBALANCE</span><strong id="live-imbalance">—</strong></div>
+        </div>
+        <div class="live-foot"><span id="fetch-time">Refresh to request a current Nansen observation.</span><button id="refresh-button" type="button">Refresh Live Data <span aria-hidden="true">↗</span></button></div>
+      </article>
+      <article id="decision-card" class="panel decision-panel">
+        <p class="eyebrow">LIVE → HISTORICAL CONTEXT</p>
+        <p id="decision-text" class="decision-text">Current regime will appear after a live observation.</p>
+        <div class="decision-rule"><span>HISTORICAL Q05</span><strong id="q05">—</strong><span>HISTORICAL Q95</span><strong id="q95">—</strong></div>
+        <p id="decision-caption" class="muted">Committed Task 034 thresholds determine which historical event group is selected.</p>
+      </article>
+    </section>
+
+    <section class="analysis-grid">
+      <article class="panel relationship-panel">
+        <div class="panel-head"><div><p class="eyebrow">TASK 034 · FIXED LAGS</p><h2>Historical relationship</h2></div><span class="unit-tag">Spearman ρ</span></div>
+        <p class="panel-caption">Hourly price return vs. OTG activity · hour-of-week residual · descriptive, not predictive</p>
+        <div id="relationship-table" class="table-wrap"><div class="loading">Validating committed analysis…</div></div>
+      </article>
+
+      <article id="event-panel" class="panel event-panel">
+        <div class="panel-head"><div><p class="eyebrow">TASK 034 · PRICE SHOCKS</p><h2>Historical event response</h2></div><span id="event-selection" class="unit-tag">Both directions</span></div>
+        <p id="event-intro" class="panel-caption">Median change from the hour before each event; 0h is same-hour association.</p>
+        <div id="event-summary" class="event-summary"><div class="loading">Loading committed event summaries…</div></div>
+      </article>
+    </section>
+
+    <footer class="footer">
+      <div><strong>Historical hourly correlations were weak and time-inconsistent.</strong><span>Descriptive only · not causality or prediction.</span></div>
+      <div class="footer-links"><span>NATIVE GUN ≠ AVALANCHE TOKEN FLOW</span><a href="https://github.com/Blackpoint133/otg-nansen" rel="noopener noreferrer" target="_blank">GitHub: Blackpoint133/otg-nansen ↗</a></div>
+    </footer>
+    <div id="history-error" class="error-banner history-error" hidden>Historical artifacts could not be validated. No substitute data is shown.</div>
+  </main>
+</body>
+</html>

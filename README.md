@@ -64,6 +64,25 @@ This command reads `server_otg_staging` only. It does not call Nansen, modify
 the database, or access production. Staging PostgreSQL connection settings
 must be configured locally; never commit `.env` or credentials.
 
+## Live Demo
+
+Install from the repository root and set your Nansen key in the local shell:
+
+```powershell
+python -m pip install -e ".[test]"
+$env:NANSEN_API_KEY = Read-Host "NANSEN_API_KEY"
+$env:PYTHONPATH = "src"
+python -m otg_nansen.demo_app --serve
+```
+
+Open <http://127.0.0.1:8765/> and select **Refresh Live Data**. The current
+card makes one bounded Avalanche `$GUN` Smart Money Flows request only when
+requested; the sanitized response is cached in memory for 60 seconds. The key
+stays in the server process and is never sent to browser code. Historical
+relationship and price-shock views come from the committed, digest-validated
+Task 034 aggregate artifacts. The demo requires no PostgreSQL connection.
+This is a local demo; it is not publicly deployed.
+
 ## Safety / Interpretation
 
 Correlation is not causation. Lagged association is not prediction. The market
