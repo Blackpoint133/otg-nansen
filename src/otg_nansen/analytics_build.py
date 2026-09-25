@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from datetime import timedelta
+from datetime import timedelta, timezone
 import os
 from typing import Any
 
@@ -57,14 +57,22 @@ def _assert_readback(connection, table: str, columns, expected_digest: str) -> t
     digest = content_digest(rows, columns)
     if len(rows) != CANONICAL_HOURS or digest != expected_digest:
         raise RuntimeError(f"{table} physical readback does not match in-memory snapshot")
-    starts = [row["hour_start"] for row in rows]
-    if starts[0].astimezone(CANONICAL_START.tzinfo) != CANONICAL_START:
+    starts = _validate_canonical_hour_identities([row["hour_start"] for row in rows])
+    if starts[0] != CANONICAL_START:
         raise RuntimeError(f"{table} minimum hour differs from canonical range")
-    if starts[-1].astimezone(CANONICAL_END.tzinfo) != CANONICAL_END:
+    if starts[-1] != CANONICAL_END:
         raise RuntimeError(f"{table} maximum hour differs from canonical range")
-    if len(set(starts)) != CANONICAL_HOURS:
-        raise RuntimeError(f"{table} contains duplicate hour identities")
     return len(rows), digest, rows
+
+
+def _validate_canonical_hour_identities(starts, expected_starts=None):
+    """Compare ordered hour identities only after canonical UTC normalization."""
+    actual_utc = tuple(value.astimezone(timezone.utc) for value in starts)
+    expected = tuple(expected_starts if expected_starts is not None else utc_hour_spine())
+    expected_utc = tuple(value.astimezone(timezone.utc) for value in expected)
+    if len(actual_utc) != len(expected_utc) or actual_utc != expected_utc:
+        raise RuntimeError("physical hour identities do not exactly match the canonical UTC sequence")
+    return actual_utc
 
 
 def build_snapshot() -> dict[str, Any]:

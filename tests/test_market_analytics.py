@@ -4,6 +4,7 @@ from decimal import Decimal
 import re
 import sys
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -422,3 +423,53 @@ def test_builder_preflight_failure_prevents_resolver(monkeypatch):
     with pytest.raises(RuntimeError, match="writer preflight failed"):
         ab.build_snapshot()
     assert calls == ["preflight"]
+
+
+def test_dst_fold_readback_normalizes_two_pacific_wall_clock_instants_to_utc():
+    pacific = ZoneInfo("America/Los_Angeles")
+    first_utc = datetime(2025, 11, 2, 8, tzinfo=UTC)
+    second_utc = datetime(2025, 11, 2, 9, tzinfo=UTC)
+    first_local = first_utc.astimezone(pacific)
+    second_local = second_utc.astimezone(pacific)
+    assert first_local.hour == second_local.hour == 1
+    assert first_local == second_local  # demonstrates why raw set(datetime) is unsafe
+    assert len({first_local, second_local}) == 1
+    assert ab._validate_canonical_hour_identities(
+        [first_local, second_local], [first_utc, second_utc]
+    ) == (first_utc, second_utc)
+
+
+def test_utc_identity_validator_accepts_full_canonical_spine():
+    hours = ma.utc_hour_spine()
+    assert ab._validate_canonical_hour_identities(hours) == tuple(hours)
+
+
+@pytest.mark.parametrize("mutation", ["missing", "duplicate", "unexpected", "wrong_order"])
+def test_utc_identity_validator_rejects_noncanonical_sequence(mutation):
+    expected = ma.utc_hour_spine(datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 1, 1, 3, tzinfo=UTC))
+    actual = list(expected)
+    if mutation == "missing": actual.pop(1)
+    elif mutation == "duplicate": actual[1] = actual[0]
+    elif mutation == "unexpected": actual[1] += timedelta(hours=1)
+    else: actual[0], actual[1] = actual[1], actual[0]
+    with pytest.raises(RuntimeError, match="canonical UTC sequence"):
+        ab._validate_canonical_hour_identities(actual, expected)
+
+
+def test_utc_identity_validator_accepts_ordered_sequence_spanning_pacific_fold():
+    pacific = ZoneInfo("America/Los_Angeles")
+    expected_utc = [datetime(2025, 11, 2, h, tzinfo=UTC) for h in range(7, 12)]
+    local = [hour.astimezone(pacific) for hour in expected_utc]
+    assert ab._validate_canonical_hour_identities(local, expected_utc) == tuple(expected_utc)
+
+
+def test_readback_still_enforces_content_digest(monkeypatch):
+    hours = ma.utc_hour_spine()
+    rows = ma.build_market_spine({}, hours)
+    digest = ma.content_digest(rows, ma.MARKET_COLUMNS)
+    monkeypatch.setattr(ab, "read_analytics_rows", lambda *_: rows)
+    count, read_digest, _ = ab._assert_readback(None, "otg_market_hourly", ma.MARKET_COLUMNS, digest)
+    assert count == ma.CANONICAL_HOURS
+    assert read_digest == digest
+    with pytest.raises(RuntimeError, match="readback does not match"):
+        ab._assert_readback(None, "otg_market_hourly", ma.MARKET_COLUMNS, "0" * 64)
