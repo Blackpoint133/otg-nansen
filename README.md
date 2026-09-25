@@ -33,8 +33,10 @@ the preregistered rules. These results do not establish predictive alpha.
 market aggregation -> aligned analytical snapshot -> preregistered analysis
 -> presentation layer`
 
-The ingestion, staging, hourly foundation, and analysis are implemented. A
-judge-facing live-data presentation layer is still pending.
+The project has implemented ingestion, canonical hourly history, the OTG hourly
+market foundation, the preregistered Task 034 descriptive analysis, and a
+tested local live-Nansen demo. Recording, posting, and entry submission remain
+operator steps.
 
 ## Reproducible Analysis
 
@@ -66,22 +68,28 @@ must be configured locally; never commit `.env` or credentials.
 
 ## Live Demo
 
-Install from the repository root and set your Nansen key in the local shell:
+From the repository root, install the project and make `NANSEN_API_KEY`
+available to the local PowerShell process. Then start the demo:
 
 ```powershell
 python -m pip install -e ".[test]"
-$env:NANSEN_API_KEY = Read-Host "NANSEN_API_KEY"
+.\scripts\run_meridian_demo.ps1
+```
+
+The app runs at <http://127.0.0.1:8765/>. Select **Refresh Live Data** to make
+one bounded Avalanche `$GUN` Smart Money Flows request. The app does not poll
+automatically; its sanitized response is cached in memory for at least 60
+seconds. The key stays in the server process and is never sent to browser code.
+Historical relationship and price-shock views come from the committed,
+digest-validated Task 034 aggregate artifacts. No PostgreSQL connection is
+required. This is a local demo and is not publicly deployed.
+
+Manual alternate launch, if the helper script is unavailable:
+
+```powershell
 $env:PYTHONPATH = "src"
 python -m otg_nansen.demo_app --serve
 ```
-
-Open <http://127.0.0.1:8765/> and select **Refresh Live Data**. The current
-card makes one bounded Avalanche `$GUN` Smart Money Flows request only when
-requested; the sanitized response is cached in memory for 60 seconds. The key
-stays in the server process and is never sent to browser code. Historical
-relationship and price-shock views come from the committed, digest-validated
-Task 034 aggregate artifacts. The demo requires no PostgreSQL connection.
-This is a local demo; it is not publicly deployed.
 
 ## Safety / Interpretation
 
@@ -91,7 +99,9 @@ from Avalanche Nansen values. No marketplace USD volume is fabricated.
 
 ## Meridian Buildathon
 
-Built with the Nansen API and maintained in a public GitHub repository.
-Submission and demo preparation is in progress. API-call eligibility is not
-claimed here; see [`docs/meridian_submission.md`](docs/meridian_submission.md)
-for the source conflict and audited count.
+Built with the Nansen API and maintained in a public GitHub repository. The
+local demo and submission materials are prepared. Recording, the X post, and
+entry submission remain operator steps. The official call threshold conflict
+and project-side documented count are recorded in
+[`docs/meridian_submission.md`](docs/meridian_submission.md); Nansen's internal
+quota total has not been independently confirmed.

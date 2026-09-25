@@ -1,115 +1,103 @@
 # Meridian Submission Readiness
 
-Readiness audit date: 2026-09-25. This document records the repository and
-read-only staging evidence available on that date. It does not claim that an
-entry has been submitted or accepted.
+Updated 2026-09-25. This document separates the Task 035 point-in-time audit
+from the current Task 036/037 readiness state. It does not claim that an entry
+has been submitted, accepted, or is award-eligible.
 
-## OFFICIAL_REQUIREMENT_CONFLICT
+## Official Requirement Conflict
 
 The [Nansen Meridian campaign page](https://nansen.ai/campaigns/meridian-buildathon)
-currently says to make **1,000 API calls**. The later-updated [Nansen Meridian
-FAQ](https://release.nansen.ai/help/articles/3540155-nansen-meridian-buildathon-sep-14-27),
-updated two days before this audit, says to log **100+ API calls between Sep
-14 and Sep 27**, and explicitly excludes calls made before Sep 14. Both pages
-give the closing time as Sep 27 at 23:59 UTC. This project does not infer
-which source supersedes the other; both thresholds are tracked below.
+states a 1,000 API-call threshold. The [Meridian FAQ](https://release.nansen.ai/help/articles/3540155-nansen-meridian-buildathon-sep-14-27)
+states 100+ calls logged between September 14 and September 27 and excludes
+earlier calls. Both sources list September 27, 2026 at 23:59 UTC as the
+deadline. This project does not infer which source supersedes the other; both
+thresholds remain visible below.
 
-## DEADLINE
+## Task 035 Historical Call Audit
 
-**2026-09-27 23:59 UTC** (exclusive end of the call-count window:
-`2026-09-28T00:00:00Z`).
+The eligible interval audited in Task 035 was
+`[2026-09-14T00:00:00Z, 2026-09-28T00:00:00Z)`. Read-only staging evidence
+identified `nansen.ingestion_runs.api_calls` as the persisted request-attempt
+measure. It records the delta in `requests_attempted`; `pages_requested` is
+not a substitute.
 
-## CALL-COUNT AUDIT
+The Task 035 audit found 85 persisted attempts across 81 runs (78 successful,
+3 failed); successful runs accounted for 82 attempts and failed runs for 3.
+All audited rows were `flows` / `smart_money`. It also reconciled 32 explicitly
+documented direct attempts not represented by those rows. Its minimum
+confirmed total was 117. These figures are retained as the historical Task
+035 snapshot and have not been rewritten.
 
-The eligible interval used was `[2026-09-14T00:00:00Z,
-2026-09-28T00:00:00Z)`. The actual staging schema is
-`nansen.ingestion_runs`. `api_calls` is the most faithful persisted measure of
-HTTP request attempts: the ingestion code records the delta in
-`requests_attempted`, including failed attempts and retries. `pages_requested`
-counts response pages and is not a substitute for request attempts.
+## Current Documented Call Minimum
 
-Read-only staging evidence: **85 audited attempts** across 81 runs (78 success,
-3 failed); successful runs account for 82 attempts and failed runs for 3.
-All were `flows` / `smart_money`. Separately, reports explicitly document 32
-direct request attempts that predate or bypassed ingestion auditing. These
-are counted once only where a report gives an explicit count and execution is
-bounded to the eligibility period. This yields a **minimum confirmed total
-of 117**. No additional ambiguous request is included. See the Task 035 report
-for the reconciliation by task.
+Task 036 separately documented one live demo validation request on September
+25, 2026. The current project-side minimum is therefore **118 in-window
+attempts**: the Task 035 minimum of 117 plus that one request. This is not a
+claim that Nansen independently confirmed the count in its quota system.
 
-| Threshold interpretation | Confirmed calls | Status | Remaining |
+| Threshold interpretation | Project-documented minimum | Status | Remaining |
 |---|---:|---|---:|
-| FAQ threshold: 100+ | 117 | Met | 0 |
-| Campaign-page threshold: 1,000 | 117 | Not met | 883 |
+| FAQ threshold: 100+ | 118 | Met | 0 |
+| Campaign-page threshold: 1,000 | 118 | Not met | 882 |
 
-The status describes documented project calls, not a guarantee of Nansen's
-independent quota accounting. No calls were made for this audit or to inflate
-a threshold.
+No synthetic or quota-padding traffic was generated.
 
-## SUBMISSION CHECKLIST
+## Current Submission Checklist
 
-- [ ] Confirm an active Nansen API key is available to the demo operator. Key
-  values were not inspected in this audit.
-- [x] Call evidence reconciled: at least 100 confirmed in-window attempts.
-- [ ] Confirm whether Nansen requires 1,000 attempts; the audited minimum is
-  117, so that threshold is not met.
+- [ ] Ensure the demo operator has an active Nansen API key configured locally.
+      The key must not be committed or shown in the recording.
 - [x] Public GitHub repository:
-  [Blackpoint133/otg-nansen](https://github.com/Blackpoint133/otg-nansen).
-- [ ] Working judge-facing demo with live Nansen data visibly driving a
-  meaningful part of the experience.
-- [ ] Silent 30–60 second screen recording (the FAQ calls for 30–60 seconds).
-- [ ] X post tagging `@nansen_ai` and linking the public GitHub repository.
-- [ ] Submit the entry form with email, X post URL, and GitHub URL.
+      [Blackpoint133/otg-nansen](https://github.com/Blackpoint133/otg-nansen).
+- [x] Working local judge-facing demo; live Nansen integration was validated
+      with one bounded request.
+- [x] Historical relationship visualization implemented from committed Task
+      034 aggregate results.
+- [x] Historical price-shock event-response visualization implemented.
+- [x] README and local startup instructions present.
+- [ ] Record the silent 30-60 second demo.
+- [ ] Publish an X post tagging `@nansen_ai` with the repository link.
+- [ ] Submit the entry form with the required contact and link fields.
+- [ ] Clarify whether the operative threshold is 100+ or 1,000 if Nansen
+      provides authoritative clarification.
 
-## JUDGING CHECKLIST
+The 100+ interpretation is met by the documented project minimum. The 1,000
+interpretation is not met. Neither status is a guarantee of Nansen's internal
+quota accounting or a statement of award eligibility.
 
-The campaign gives equal weight to Data Integration, Functionality &
-Workability, Creativity & Originality, and Documentation & Submission.
+## Current Judging-Criteria Mapping
 
-| Criterion | Current repository evidence | Remaining gap |
+| Criterion | Current repository evidence | Remaining work |
 |---|---|---|
-| Data Integration | Real Avalanche `$GUN` Smart Money ingestion and a 12,336-hour aligned historical dataset; Nansen price and flow-count fields drive fixed, preregistered analysis. | No judge-facing current/live Nansen view exists yet. |
-| Functionality & Workability | Tested ingestion/backfill tools, read-only analysis runner, committed aggregate results. | No integrated visual demo to run end to end. |
-| Creativity & Originality | OTG marketplace activity is compared with Avalanche `$GUN` Smart Money observations using explicit cross-chain separation and a price-shock summary. | The specific use case is implemented as research artifacts, not yet presented as a usable product surface. |
-| Documentation & Submission | Updated README, analysis report, this checklist, public repository. | Demo, recording, X post, and entry form remain pending. |
+| Data Integration | Real Avalanche `$GUN` Smart Money data drives the live observation and the committed historical price/flow analysis; OTG marketplace activity is a separate native-GUN series. | Record the demo so judges can review the integrated experience. |
+| Functionality & Workability | Local UI, explicit live refresh, bounded request, in-memory cache, and committed digest-validated historical artifacts. No PostgreSQL is required to run the demo. | Operator should rehearse the startup and capture sequence. |
+| Creativity & Originality | OTG marketplace behavior is contextualized against Nansen `$GUN` Smart Money observations and the historical price-shock response summary. | Present the use case clearly in the recording without suggesting a trading signal. |
+| Documentation & Submission | README, methodology, task reports, demo storyboard, recording checklist, X draft, and submission copy bank are present. | Recording, X post, and final entry-form submission remain pending. |
 
-## CURRENT PROJECT EVIDENCE
+## Current Project Evidence
 
-- Task 033 ratified the staging-only joined hourly foundation.
-- Task 034 preregistered its analysis before reading the source snapshot and
-  retained all 48 relationship cells and 24 event-summary cells.
-- The committed result reports weak, time-inconsistent price-return
-  associations. Flow-imbalance-share estimates were too sparse under the
-  frozen rules. This is not a predictive or causal result.
-- The Task 034 report, methodology, CSV summaries, and summary JSON are
-  committed under `DEV/` and `docs/`.
-- The GitHub repository is public. This audit found no live-demo UI, charting
-  surface, public web integration, or integrated one-command presentation
-  flow in this repository.
+- Task 033 ratified the 12,336-hour staging-only hourly foundation.
+- Task 034 preregistered its methods and retained all 48 relationship cells
+  and 24 event-summary cells.
+- Task 034 found weak, time-inconsistent hourly price-return associations.
+  Flow-imbalance-share analysis was too sparse under its fixed rules. These
+  findings are descriptive and do not establish prediction or causation.
+- Task 036 added a local live-data demo. Its explicit refresh makes a bounded
+  Nansen request; current live return selects the matching historical shock
+  context using thresholds loaded from digest-validated Task 034 artifacts.
+- Task 036 validated the adapter with one live request. Its local route smoke
+  test used an offline fake provider.
+- Task 037 adds a Windows launch helper and operator-facing recording and
+  submission materials; it makes no live API request.
 
-## GAPS
+## Remaining Gaps
 
-1. Build a small read-only presentation surface with one live Nansen-backed
-   component and the committed historical analysis.
-2. Exercise the demo using a valid local API key and document startup in the
-   README; do not expose the key in the browser or logs.
-3. Record the required silent 30–60 second walkthrough.
-4. Publish the X post and submit the entry form.
-5. Resolve the 100 versus 1,000 threshold with Nansen or retain both
-   interpretations when making any eligibility statement.
+1. Operator must launch and record the local demo using the checklist.
+2. Operator must review and publish the X post, then submit the entry form.
+3. Official sources still conflict between 100+ and 1,000 calls; clarify with
+   Nansen if possible.
+4. The demo is local only and has not been publicly deployed.
 
-The next code milestone is specified in
-[`meridian_demo_script.md`](meridian_demo_script.md). No API call was made to
-complete this audit.
-
-## TASK 036 STATUS ADDENDUM
-
-Task 035 remains the historical audit snapshot above. After it, Task 036 added
-one separately documented live demo validation request on 2026-09-25 UTC. The
-documented project minimum is therefore **118 in-window attempts** (117 from
-the Task 035 minimum plus this one request). This is project-side evidence and
-does not guarantee that Nansen's internal quota counter records the same
-total. The 100+ interpretation is met by this documented minimum; the 1,000
-interpretation remains unmet. The local demo now has a working read-only
-presentation surface and passed a one-request live validation; the recording,
-X post, and entry form remain pending.
+For the exact local steps, see
+[`meridian_recording_checklist.md`](meridian_recording_checklist.md). Draft
+materials are in [`meridian_x_post_draft.md`](meridian_x_post_draft.md) and
+[`meridian_submission_copy.md`](meridian_submission_copy.md).

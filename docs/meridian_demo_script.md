@@ -1,28 +1,26 @@
 # Meridian Silent Demo Storyboard
 
-Specification for the next demo implementation. Target runtime: **45 seconds**
-(within the FAQ's 30–60 second range). No narration; use large on-screen labels
-and readable captions. The current repository has no presentation UI, so every
-proposed visual or live surface below is marked `PENDING_IMPLEMENTATION`.
+The local demo is implemented. This storyboard describes a silent recording
+of approximately 45 seconds, within the 30-60 second range listed in the
+Meridian FAQ. The operator steps are in
+[`meridian_recording_checklist.md`](meridian_recording_checklist.md).
 
-| Time | Silent screen and on-screen text | Implementation state |
-|---|---|---|
-| 0–5 s | Title card: “Does Avalanche `$GUN` Smart Money activity line up with Off The Grid marketplace activity?” Subtitle: “Historical descriptive research — not a trading signal.” | `PENDING_IMPLEMENTATION` title/demo shell |
-| 5–13 s | A clearly timestamped “Latest Nansen `$GUN`” card showing one current price/flow snapshot and its source time. A compact label explains that the live Nansen observation drives this panel. Show loading/error state if unavailable; never substitute canned values. | `PENDING_IMPLEMENTATION` live Nansen view and data endpoint |
-| 13–22 s | Historical comparison panel: hourly Nansen `$GUN` price return beside OTG trade-transaction count and native-GUN amount across the analyzed period. Label both sources and their units; retain separate axes/series. | `PENDING_IMPLEMENTATION` historical visualization backed by committed Task 034 artifacts |
-| 22–31 s | Price-shock panel: positive/negative 5th/95th percentile event groups and the committed event-response medians at 0, 1, 6, and 24 hours. Add “0h = same-hour association; ordering unknown.” | `PENDING_IMPLEMENTATION` event-summary visualization |
-| 31–38 s | Result card: “Price-return associations were weak and time-inconsistent. Flow-share estimates were too sparse under the preregistered rule.” Add “Descriptive only · no causality or prediction claim.” | `PENDING_IMPLEMENTATION` results panel |
-| 38–45 s | Project identity/end card: “OTG - Nansen Market Intelligence,” public GitHub URL, methodology/report links, and “Built with Nansen API.” | `PENDING_IMPLEMENTATION` branded end card |
+| Time | Screen and readable on-screen point |
+|---|---|
+| 0-5 sec | Show OTG - Nansen Market Intelligence and the question: does Avalanche `$GUN` Smart Money activity relate to Off The Grid marketplace activity? |
+| 5-14 sec | Click **Refresh Live Data** once. Show the latest completed bucket, price, 1-hour move, and LIVE badge. |
+| 14-23 sec | Show the live-to-historical regime card and the Task 034 thresholds that classify the observation. |
+| 23-32 sec | Show the fixed-lag historical relationship panel: three market outcomes across 0h, 1h, 6h, and 24h. |
+| 32-40 sec | Show the historical price-shock response panel for trades, native GUN volume, and unique buyers. |
+| 40-47 sec | Finish on the weak/time-inconsistent result, descriptive limitations, cross-chain separation, and GitHub identity. |
 
 ## Capture Rules
 
-- Capture the application running, with the live Nansen component successfully
-  loaded during the recording. If it cannot load, show an honest error state
-  and do not imply that a live result was retrieved.
-- Keep the observation timestamp and source labels visible. Do not present
-  Avalanche `$GUN` values and native marketplace GUN as numerically
-  interchangeable.
-- Use only the committed Task 034 relationship/event outputs for the
-  historical panel. Do not rerun or tune the analysis for the demo.
-- Do not add a trading signal, causal wording, or unsourced market USD value.
-- Keep the GitHub URL and methodology references legible in the final frame.
+- Keep the live observation timestamp and source labels visible.
+- If live data cannot load, retain the honest error state; never substitute a
+  canned value and label it live.
+- Keep Avalanche `$GUN` observations separate from native marketplace GUN
+  amounts.
+- Treat 0h as same-hour association; within-hour causal ordering is unknown.
+- Do not describe the results as causal, predictive, or a trading signal.
+- Keep the GitHub URL legible in the closing frame.
