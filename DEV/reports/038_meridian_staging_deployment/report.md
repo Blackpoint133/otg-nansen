@@ -131,3 +131,27 @@ committed and pushed. The remote readback SHA is recorded in the final status.
 None for staging deployment. The operator can open
 `https://otgostest.run.place/` directly. Recording and submission remain
 separate operator tasks.
+
+## Architecture Correction: Native OTG Analytics Mode
+
+On 2026-09-25 the deployment requirement was clarified: the staging domain
+must remain the existing OTG Analytics application, with Nansen available as
+one native analytics mode. The Task 038 Caddy change had routed the entire
+staging host to the standalone service on port 8765. The original staging
+Streamlit application on port 8504 was verified healthy, and the staging
+upstream was restored to `127.0.0.1:8504`; Caddy validation and hot reload
+passed. The production host configuration was not changed.
+
+The standalone service remains a loopback-only internal backend. The Nansen
+mode was implemented in the separate `Blackpoint133/otg-analytics` repository,
+using its existing `mode` query parameter and Analytics dropdown. The public
+route is `https://otgostest.run.place/?mode=nansen`; the site reads the
+digest-validated historical aggregates and calls the internal live endpoint
+only on explicit user refresh. No page-load live request was observed.
+
+One deliberate browser refresh returned a fresh completed-bucket observation
+and the `MIDDLE_90_PERCENT` classification; no volatile price or flow values
+are recorded here. Production `https://otgos.run.place/` remained reachable
+and its configuration/service were left untouched. Detailed implementation
+and validation evidence is in the native-mode integration report in the
+`otg-analytics` repository.
