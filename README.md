@@ -1,57 +1,78 @@
-# OTG Nansen Analytics
+# OTG - Nansen Market Intelligence
 
-Public early-stage project for Nansen-powered analysis of `$GUN` activity and
-subsequent Off The Grid NFT/item-market reactions. Nansen is intended as a
-token and wallet intelligence source; the relationship between observed token
-activity and market behavior will be investigated rather than assumed.
+## What It Does
 
-This repository is the Nansen competition/buildathon project and is currently
-in early development and reconnaissance. It makes no predictive or causal
-claims.
+This project ingests Nansen Avalanche `$GUN` Smart Money flow history, aligns
+OTG marketplace activity to UTC hours, and builds a complete 12,336-hour joined
+dataset. A preregistered descriptive analysis compares fixed-lag Nansen price
+and flow measures with OTG activity and summarizes marketplace behavior
+around large price moves. The analysis preserves weak, null, and
+time-inconsistent results instead of tuning methods for a preferred result.
 
-## Setup
+## Why Nansen Matters
 
-Setup remains minimal while the architecture and Nansen API surface are being
-verified. Copy the safe variable names from `.env.example` into a local `.env`
-and provide values through your local secret-management workflow. Never commit
-`.env`.
+Nansen data drives the analysis. Hourly `price_usd` supplies the preregistered
+one-hour `$GUN` price return and price-shock event thresholds. The hourly
+`total_inflows_count` and `total_outflows_count` fields define
+`flow_imbalance_share`; its sparse observations are retained and reported as
+not reliably estimable where the preregistered rules require. Other source
+fields are retained in the aligned data contract but were not promoted to
+additional Task 034 drivers.
 
-## Status
+## Current Result
 
-Phase 0A bootstrap and Phase 0B reconnaissance are complete. A bounded Nansen
-client foundation and fixture-first contract tests are now implemented. The
-evidence supports a primary Avalanche MVP source with Solana retained as a
-tested secondary source. Persistence and parser business logic remain later
-phases. The client contracts are represented by sanitized fixtures and strict
-shape tests; the raw-to-normalized boundary now produces immutable models with
-UTC timestamps and Decimal numeric values. Staging persistence and bounded
-fixture-backed ingestion orchestration are implemented; real `$GUN` ingestion
-is not.
-Task 007 added a proposed, review-only PostgreSQL design and parameter mapping;
-the migration was not applied at that stage.
-Task 008 hardens persistence semantics with request-scope provenance,
-canonical stable keys, and separate checkpoint streams for flow labels.
-Task 009 finalizes the proposed persistence boundary: flows require an
-explicit non-empty scope, equivalent Decimal key values canonicalize alike,
-flow keys exclude unproven bucket observations, and parameterized upserts
-protect complete records from incomplete downgrades. Audit lifecycle state is
-durable separately from the data/checkpoint transaction. Migration status was
-NOT APPLIED at that stage.
-Task 010 closes the remaining pre-DDL consistency gaps: Avalanche EVM
-addresses are lowercase at the persistence boundary, Solana addresses remain
-case-sensitive, flow scopes are trimmed and required, and successful data,
-checkpoint, and audit status commit atomically. Migration status was NOT
-APPLIED before staging authorization.
-Task 011 adds a psycopg3 repository adapter and a staging-only migration
-command. The migration is guarded to `server_otg_staging` and is now applied
-there. Production is not connected for writes or modified.
+In the analyzed sample, hourly `$GUN` price-return relationships with OTG
+marketplace activity were weak and time-inconsistent. Descriptive responses
+around extreme price moves are available in the committed event summary.
+Flow-imbalance-share relationships were too sparse to estimate reliably under
+the preregistered rules. These results do not establish predictive alpha.
 
-Task 013A applied the reviewed `nansen` schema to `server_otg_staging` only.
-Task 013B validated the real PostgreSQL repository and cleaned all synthetic
-integration data. The owner intentionally retains CREATE on
-`server_otg_staging` as a persistent staging-only privilege; no such privilege
-was granted on production.
+## Architecture
 
-Task 014 adds injectable bounded orchestration from source pagination through
-normalization, audit, staging persistence, and checkpoint advancement. It uses
-no live Nansen calls; real `$GUN` ingestion remains a later task.
+`Nansen API -> normalized staging -> canonical hourly history -> OTG hourly
+market aggregation -> aligned analytical snapshot -> preregistered analysis
+-> presentation layer`
+
+The ingestion, staging, hourly foundation, and analysis are implemented. A
+judge-facing live-data presentation layer is still pending.
+
+## Reproducible Analysis
+
+From the repository root, install and run the offline suite:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[test]"
+pytest -q
+```
+
+Committed Task 034 aggregate results are in `DEV/analysis/034_*.csv` and
+`DEV/analysis/034_analysis_summary.json`; the interpretation and integrity
+details are in
+[`DEV/reports/034_otg_gun_relationship_analysis/report.md`](DEV/reports/034_otg_gun_relationship_analysis/report.md).
+
+To rerun the frozen analysis against an already configured staging snapshot
+(read-only; writes aggregate result files locally):
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m otg_nansen.relationship_analysis --execute-readonly
+```
+
+This command reads `server_otg_staging` only. It does not call Nansen, modify
+the database, or access production. Staging PostgreSQL connection settings
+must be configured locally; never commit `.env` or credentials.
+
+## Safety / Interpretation
+
+Correlation is not causation. Lagged association is not prediction. The market
+amount is parser-recorded integer-truncated native GUN; it is kept separate
+from Avalanche Nansen values. No marketplace USD volume is fabricated.
+
+## Meridian Buildathon
+
+Built with the Nansen API and maintained in a public GitHub repository.
+Submission and demo preparation is in progress. API-call eligibility is not
+claimed here; see [`docs/meridian_submission.md`](docs/meridian_submission.md)
+for the source conflict and audited count.
