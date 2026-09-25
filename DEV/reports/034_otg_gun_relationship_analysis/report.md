@@ -107,8 +107,8 @@ Using all non-NULL 1-hour price returns, q05 = `-0.016533971142` and q95 = `0.01
 
 ## EVENT_COUNTS
 
-- Positive candidates: 617; selected after 24-hour declustering: 146; retained after requiring t-1 and t+24: 145. 
-- Negative candidates: 617; selected after 24-hour declustering: 146; retained after the same boundary rule: 145. 
+- Positive candidates: 617; selected after 24-hour declustering: 146; retained after requiring t-1 and t+24: 145.
+- Negative candidates: 617; selected after 24-hour declustering: 146; retained after the same boundary rule: 145.
 Each retained sign population contains the same events across all outcomes and horizons. Candidate signs were declustered separately.
 
 ## EVENT_DECLUSTERING
