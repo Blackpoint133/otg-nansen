@@ -1,46 +1,77 @@
 # OTG - Nansen Market Intelligence
 
-## What It Does
+Live $GUN context and historical OTG marketplace reaction, built with Nansen data.
 
-This project ingests Nansen Avalanche `$GUN` Smart Money flow history, aligns
-OTG marketplace activity to UTC hours, and builds a complete 12,336-hour joined
-dataset. A preregistered descriptive analysis compares fixed-lag Nansen price
-and flow measures with OTG activity and summarizes marketplace behavior
-around large price moves. The analysis preserves weak, null, and
-time-inconsistent results instead of tuning methods for a preferred result.
+**Try the live product:** [OTG - Nansen Market Intelligence](https://otgos.run.place/?mode=nansen)
+
+## What It Is
+
+OTG — Nansen Market Intelligence is an experimental market-intelligence layer for the Off The Grid NFT marketplace. It combines current Avalanche $GUN market context from Nansen with historical OTG marketplace activity.
+
+The page helps users see whether current $GUN conditions are within the usual historical range or unusually strong, then compare them with how OTG activity behaved around similar past moves. It provides context, not a prediction or causal explanation.
+
+## Live Product
+
+The Nansen mode is integrated into the production version of OTG Analytics:
+
+**[Open OTG Analytics - Nansen mode](https://otgos.run.place/?mode=nansen)**
+
+OTG Analytics covers the Off The Grid NFT marketplace. Its Nansen mode adds live $GUN context and a historical cross-market comparison. A shared observation updates automatically on an approximately hourly schedule, so users see the latest successful data without triggering a request from each page visit.
+
+## What You Can Analyze
+
+The production page shows:
+
+- Current Avalanche $GUN price and its one-hour move.
+- Nansen Smart Money flow context.
+- Whether the current move is inside or outside its normal historical range.
+- Historical OTG transaction, native GUN marketplace volume, and active-buyer responses.
+- Fixed 0h, 1h, 6h, and 24h comparison horizons.
+- A concise Market Takeaway.
 
 ## Why Nansen Matters
 
-Nansen data drives the analysis. Hourly `price_usd` supplies the preregistered
-one-hour `$GUN` price return and price-shock event thresholds. The hourly
-`total_inflows_count` and `total_outflows_count` fields define
-`flow_imbalance_share`; its sparse observations are retained and reported as
-not reliably estimable where the preregistered rules require. Other source
-fields are retained in the aligned data contract but were not promoted to
-additional Task 034 drivers.
+Nansen data drives the product logic. Avalanche $GUN price observations determine the current market context and define the historical price-move groups. Nansen Smart Money flow data adds live flow context. Those observations are compared with OTG marketplace activity, so Nansen is part of the analysis rather than a decorative data feed.
 
-## Current Result
+## Historical Result
 
-In the analyzed sample, hourly `$GUN` price-return relationships with OTG
-marketplace activity were weak and time-inconsistent. Descriptive responses
-around extreme price moves are available in the committed event summary.
-Flow-imbalance-share relationships were too sparse to estimate reliably under
-the preregistered rules. These results do not establish predictive alpha.
+Historical hourly $GUN price-return relationships with OTG marketplace activity were weak and time-inconsistent. Responses around unusually large $GUN moves remain useful as descriptive market context, but the observed relationship was not strong enough to justify a standalone predictive trading signal.
 
-## Architecture
+Historical flow-imbalance observations were too sparse to estimate a reliable relationship under the preregistered rules. This result is preserved as observed; the analysis was not tuned to produce a stronger conclusion.
 
-`Nansen API -> normalized staging -> canonical hourly history -> OTG hourly
-market aggregation -> aligned analytical snapshot -> preregistered analysis
--> presentation layer`
+## How the Product Works
 
-The project has implemented ingestion, canonical hourly history, the OTG hourly
-market foundation, the preregistered Task 034 descriptive analysis, and a
-tested local live-Nansen demo. Recording, posting, and entry submission remain
-operator steps.
+**Live context:** A private production service retrieves Nansen data on a shared hourly schedule and serves a sanitized latest successful observation to OTG Analytics.
 
-## Reproducible Analysis
+**Historical context:** A fixed, complete hourly dataset aligns Avalanche $GUN observations with OTG marketplace activity. Preregistered aggregate results provide the historical relationship and price-move comparisons shown in the page.
 
-From the repository root, install and run the offline suite:
+Conceptually:
+
+`Nansen API -> normalized $GUN observations -> canonical hourly history -> OTG hourly marketplace activity -> aligned historical analysis -> shared live context -> OTG Analytics Nansen mode`
+
+The live observation describes current conditions. The historical analysis describes what was observed in the fixed sample; it does not forecast what happens next.
+
+## Meridian Buildathon
+
+Built for the Nansen Meridian Buildathon, this project uses Nansen data as a core analytical input and is available in the production OTG Analytics application. Official Buildathon materials have differed on the API-call threshold; the project's documented audit and source notes are available in the [submission readiness record](docs/meridian_submission.md). The project does not generate calls merely to inflate a quota.
+
+## Historical Dataset and Method
+
+The historical comparison contains 12,336 aligned hourly observations spanning 2025-04-25 through 2026-09-20. The fixed comparisons use 0h, 1h, 6h, and 24h offsets. The price-move view compares OTG marketplace responses around unusually positive and negative hourly $GUN returns.
+
+The analysis plan, transformations, event rules, and limitations are documented in the [market reaction methodology](docs/market_reaction_methodology.md). The full relationship matrix, event summaries, and aggregate digests are committed under `DEV/analysis/`; the readable findings are in the [analysis report](DEV/reports/034_otg_gun_relationship_analysis/report.md).
+
+## Limitations and Interpretation
+
+The findings are descriptive. Correlation does not establish causation, and a lagged association is not a prediction. The historical relationship was weak and time-inconsistent.
+
+Avalanche Nansen metrics and OTG marketplace-native GUN amounts are kept separate. Marketplace USD volume is not fabricated. Smart Money flow imbalance is shown as context; its historical coverage is too sparse for a reliable predictive relationship.
+
+## Reproducibility
+
+### Offline installation and tests
+
+From the repository root:
 
 ```powershell
 python -m venv .venv
@@ -49,59 +80,46 @@ python -m pip install -e ".[test]"
 pytest -q
 ```
 
-Committed Task 034 aggregate results are in `DEV/analysis/034_*.csv` and
-`DEV/analysis/034_analysis_summary.json`; the interpretation and integrity
-details are in
-[`DEV/reports/034_otg_gun_relationship_analysis/report.md`](DEV/reports/034_otg_gun_relationship_analysis/report.md).
+The default suite uses offline fixtures and does not require PostgreSQL, Nansen, or on-chain RPC access.
 
-To rerun the frozen analysis against an already configured staging snapshot
-(read-only; writes aggregate result files locally):
+### Inspect committed results
+
+The aggregate result files are:
+
+- `DEV/analysis/034_relationship_matrix.csv`
+- `DEV/analysis/034_price_shock_event_summary.csv`
+- `DEV/analysis/034_analysis_summary.json`
+
+Their source snapshot and content digests are recorded in the summary and analysis report.
+
+### Repeat the read-only analysis
+
+With local read-only staging database settings configured, the preregistered analysis can be rerun from the repository root:
 
 ```powershell
 $env:PYTHONPATH = "src"
 python -m otg_nansen.relationship_analysis --execute-readonly
 ```
 
-This command reads `server_otg_staging` only. It does not call Nansen, modify
-the database, or access production. Staging PostgreSQL connection settings
-must be configured locally; never commit `.env` or credentials.
+This reads the staging analytical snapshot and writes aggregate result files locally. It does not call Nansen or modify database data. Never commit database credentials or `.env` files.
 
-## Live Demo
+### Run a separate local live service
 
-From the repository root, install the project and make `NANSEN_API_KEY`
-available to the local PowerShell process. Then start the demo:
+A local live service is optional; judges can use the production link above. To run the service locally, install the project and provide `NANSEN_API_KEY` in the server process environment:
 
 ```powershell
 python -m pip install -e ".[test]"
 .\scripts\run_meridian_demo.ps1
 ```
 
-The app runs at <http://127.0.0.1:8765/>. Select **Refresh Live Data** to make
-one bounded Avalanche `$GUN` Smart Money Flows request. The app does not poll
-automatically; its sanitized response is cached in memory for at least 60
-seconds. The key stays in the server process and is never sent to browser code.
-Historical relationship and price-shock views come from the committed,
-digest-validated Task 034 aggregate artifacts. No PostgreSQL connection is
-required. This is a local demo and is not publicly deployed.
+The script starts a local service at <http://127.0.0.1:8765/>. It performs a shared initial refresh when needed and then follows the hourly schedule; page reads do not request fresh Nansen data. Its persisted sanitized state is local to the configured service environment. No PostgreSQL connection is needed for the live page.
 
-Manual alternate launch, if the helper script is unavailable:
+## Data Safety
 
-```powershell
-$env:PYTHONPATH = "src"
-python -m otg_nansen.demo_app --serve
-```
+Nansen credentials remain server-side. The public page receives only sanitized current aggregate fields and committed historical summaries. The application does not require a PostgreSQL connection for demo runtime.
 
-## Safety / Interpretation
+## Project Records
 
-Correlation is not causation. Lagged association is not prediction. The market
-amount is parser-recorded integer-truncated native GUN; it is kept separate
-from Avalanche Nansen values. No marketplace USD volume is fabricated.
-
-## Meridian Buildathon
-
-Built with the Nansen API and maintained in a public GitHub repository. The
-local demo and submission materials are prepared. Recording, the X post, and
-entry submission remain operator steps. The official call threshold conflict
-and project-side documented count are recorded in
-[`docs/meridian_submission.md`](docs/meridian_submission.md); Nansen's internal
-quota total has not been independently confirmed.
+- [Market reaction methodology](docs/market_reaction_methodology.md)
+- [Submission requirements and documented call audit](docs/meridian_submission.md)
+- [Analysis findings](DEV/reports/034_otg_gun_relationship_analysis/report.md)
