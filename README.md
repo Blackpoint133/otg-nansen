@@ -16,7 +16,7 @@ The Nansen mode is integrated into the production version of OTG Analytics:
 
 **[Open OTG Analytics - Nansen mode](https://otgos.run.place/?mode=nansen)**
 
-OTG Analytics covers the Off The Grid NFT marketplace. Its Nansen mode adds live $GUN context and a historical cross-market comparison. A shared observation updates automatically on an approximately hourly schedule, so users see the latest successful data without triggering a request from each page visit.
+OTG Analytics covers the Off The Grid NFT marketplace. Its Nansen mode adds live $GUN context and a historical cross-market comparison. A shared observation updates automatically on an approximately hourly schedule, so users see the latest successful data without triggering a request from each page visit. If a scheduled refresh fails, the last successful observation remains available.
 
 ## What You Can Analyze
 
