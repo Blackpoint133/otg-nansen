@@ -1,7 +1,21 @@
 # Deployment
 
-Development and test validation must precede any production consideration.
-The reviewed `nansen` schema is applied to `server_otg_staging` only.
+Development and test validation must precede deployment changes. The reviewed
+`nansen` schema is applied to `server_otg_staging` only; the Nansen UI/runtime
+does not require a production PostgreSQL migration.
+
+## Production Integration
+
+The public product is the native Nansen mode in OTG Analytics:
+<https://otgos.run.place/?mode=nansen>.
+
+The production application reads from a private loopback Nansen backend that
+is separate from the staging service. The backend refreshes one shared,
+sanitized observation approximately once per hour and persists the latest
+successful state across service restarts. Page visits, chart changes, and
+Guide interactions do not trigger Nansen requests. Credentials remain
+server-side. The Nansen UI/runtime requires no production PostgreSQL schema or
+data changes.
 
 ## Meridian Staging Integration
 
@@ -34,9 +48,8 @@ and leaves the last successful observation available. The OTG Analytics mode
 only reads this cached snapshot; page loads, sessions, and chart interactions
 do not make Nansen requests.
 
-Production `https://otgos.run.place/` and its application service are outside
-this staging route. Do not change its Caddy block or application service while
-maintaining the Meridian staging integration.
+This section describes staging only. Production has its own application and
+Nansen backend services; staging changes do not configure or update them.
 
 The Nansen mode has no manual refresh control. The state file stores only the
 sanitized successful observation, last attempt time, and sanitized failure
